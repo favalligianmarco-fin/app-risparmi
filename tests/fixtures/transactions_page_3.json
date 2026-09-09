@@ -1,0 +1,43 @@
+{
+  "transactions": [
+    {
+      "entry_reference": null,
+      "merchant_category_code": "5411",
+      "transaction_amount": { "currency": "EUR", "amount": "1.20" },
+      "creditor": { "name": "CAFFETTERIA DEL CORSO" },
+      "credit_debit_indicator": "DBIT",
+      "status": "BOOK",
+      "booking_date": "2025-03-02",
+      "value_date": "2025-03-02",
+      "transaction_date": "2025-03-02",
+      "remittance_information": ["POS 02/03/25"],
+      "transaction_id": null
+    },
+    {
+      "entry_reference": null,
+      "merchant_category_code": "5411",
+      "transaction_amount": { "currency": "EUR", "amount": "1.20" },
+      "creditor": { "name": "CAFFETTERIA DEL CORSO" },
+      "credit_debit_indicator": "DBIT",
+      "status": "BOOK",
+      "booking_date": "2025-03-02",
+      "value_date": "2025-03-02",
+      "transaction_date": "2025-03-02",
+      "remittance_information": ["POS 02/03/25"],
+      "transaction_id": null
+    },
+    {
+      "entry_reference": "PENDING-XYZ",
+      "transaction_amount": { "currency": "EUR", "amount": "45.00" },
+      "creditor": { "name": "DISTRIBUTORE Q8" },
+      "credit_debit_indicator": "DBIT",
+      "status": "PDNG",
+      "booking_date": null,
+      "value_date": "2025-03-01",
+      "transaction_date": "2025-03-01",
+      "remittance_information": ["AUTORIZZAZIONE IN CORSO"],
+      "transaction_id": null
+    }
+  ],
+  "continuation_key": null
+}

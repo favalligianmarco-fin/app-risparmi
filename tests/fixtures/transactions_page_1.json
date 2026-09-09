@@ -1,0 +1,45 @@
+{
+  "transactions": [
+    {
+      "entry_reference": "202503140000123456",
+      "merchant_category_code": "5812",
+      "transaction_amount": { "currency": "EUR", "amount": "12.50" },
+      "creditor": { "name": "BAR CENTRALE SRL", "postal_address": null },
+      "creditor_account": null,
+      "debtor": null,
+      "debtor_account": null,
+      "bank_transaction_code": { "description": "PAGAMENTO CARTA DI DEBITO", "code": null, "sub_code": null },
+      "credit_debit_indicator": "DBIT",
+      "status": "BOOK",
+      "booking_date": "2025-03-14",
+      "value_date": "2025-03-14",
+      "transaction_date": "2025-03-13",
+      "balance_after_transaction": null,
+      "reference_number": null,
+      "remittance_information": ["POS 14/03/25 BAR CENTRALE MILANO"],
+      "note": null,
+      "transaction_id": null
+    },
+    {
+      "entry_reference": "202503140000123457",
+      "merchant_category_code": null,
+      "transaction_amount": { "currency": "EUR", "amount": "1850.00" },
+      "creditor": null,
+      "creditor_account": null,
+      "debtor": { "name": "AZIENDA SPA" },
+      "debtor_account": { "iban": "IT60X0542811101000000123456", "other": null },
+      "bank_transaction_code": { "description": "ACCREDITO STIPENDIO", "code": null, "sub_code": null },
+      "credit_debit_indicator": "CRDT",
+      "status": "BOOK",
+      "booking_date": "2025-03-10",
+      "value_date": "2025-03-10",
+      "transaction_date": "2025-03-10",
+      "balance_after_transaction": { "currency": "EUR", "amount": "2431.77" },
+      "reference_number": "STIP032025",
+      "remittance_information": ["STIPENDIO MARZO 2025"],
+      "note": null,
+      "transaction_id": null
+    }
+  ],
+  "continuation_key": "PAGINA-2"
+}
