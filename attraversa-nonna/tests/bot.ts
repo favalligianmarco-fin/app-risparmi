@@ -21,7 +21,7 @@ const SAFETY = 0.22;
 function rowSafe(sim: Sim, row: number, col: number, t0: number, t1: number): boolean {
   const rs = sim.rowState(row);
   if (!isHazard(rs.def.kind)) return true;
-  if (rs.def.kind === 'tram' && (rs.warn || rs.vehicles.length)) return false;
+  if ((rs.def.kind === 'tram' || rs.def.kind === 'rail') && (rs.warn || rs.vehicles.length)) return false;
   const cx = col + 0.5;
   for (const v of rs.vehicles) {
     const reach = v.len / 2 + HIT_HALF_WIDTH + SAFETY;
@@ -39,7 +39,7 @@ function rowSafe(sim: Sim, row: number, col: number, t0: number, t1: number): bo
     if (cx > lo && cx < hi) return false;
   }
   // un veicolo che potrebbe entrare dal bordo durante l'attraversamento
-  if (rs.def.kind !== 'tram' && rs.vehicles.length) {
+  if (rs.def.kind !== 'tram' && rs.def.kind !== 'rail' && rs.vehicles.length) {
     const last = rs.vehicles[rs.vehicles.length - 1];
     const entry = rs.def.dir > 0 ? -5 : COLS + 5;
     const dist = Math.abs(cx - entry);
@@ -99,7 +99,7 @@ function decide(sim: Sim, waited: number): Dir | 'slipper' | null {
   // il temporale si avvicina (o si aspetta da troppo): fuori la ciabatta
   const storm = sim.playerPos().y - sim.stormY;
   if ((waited > 3.5 || storm < 4) && p.slippers > 0 && runLength(sim, row) > 0) {
-    if (next.def.kind !== 'tram') return 'slipper';
+    if (next.def.kind !== 'tram' && next.def.kind !== 'rail') return 'slipper';
   }
   // spostarsi di lato se da un'altra parte si passa prima
   for (let d = 1; d <= 3; d++) {

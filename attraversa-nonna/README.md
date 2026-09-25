@@ -5,17 +5,23 @@ scout) il più lontano possibile, attraversando strade sempre più trafficate. O
 tanto c'è una sosta con un minigioco da fare con lei. È pensato per l'App Store:
 funziona offline, non raccoglie dati e non chiede permessi.
 
-| Titolo | Ciabatta | Sosta alla Posta | Tram | Temporale | Le nonne |
+| Ciabatta | Il palazzo della sosta | Salta la fila | Alta velocità | Temporale | Le nonne |
 |---|---|---|---|---|---|
-| ![](docs/screenshots/it/1-titolo.jpg) | ![](docs/screenshots/it/2-ciabatta.jpg) | ![](docs/screenshots/it/3-posta.jpg) | ![](docs/screenshots/it/4-tram.jpg) | ![](docs/screenshots/it/5-temporale.jpg) | ![](docs/screenshots/it/6-nonne.jpg) |
+| ![](docs/screenshots/it/2-ciabatta.jpg) | ![](docs/screenshots/it/3-palazzo.jpg) | ![](docs/screenshots/it/4-posta.jpg) | ![](docs/screenshots/it/5-treno.jpg) | ![](docs/screenshots/it/6-temporale.jpg) | ![](docs/screenshots/it/7-nonne.jpg) |
 
 ## Come si gioca
 
 - **Tocca** per fare un passo avanti; **scorri** a destra, a sinistra o indietro
   per spostarti. Ogni passo avanti è **un metro**: il punteggio è la distanza.
-- **Più vai lontano, più è difficile**: corsie in più, traffico più veloce, spazi
-  più stretti; da ~250 m piste ciclabili e binari del tram si incastrano con le
+- **Più vai lontano, più è difficile**: i mezzi vanno sempre più forte (×1,6 a
+  250 m, ×2,25 a 500 m, ×3,5 a 1000 m, fino a ×4,2), le corsie aumentano e gli
+  spazi si stringono; da ~250 m piste ciclabili e binari si incastrano con le
   strade senza spartitraffico in mezzo.
+- **Mezzi all'italiana, senza marchi**: l'utilitaria squadrata anni '80, la
+  piccola tondeggiante col tettuccio di tela, il furgoncino col cassone alto, il
+  motocarro, lo scooter, il pullman, il tram. Da ~180 m arriva la **ferrovia**
+  con il passaggio a livello: treni regionali e treni ad alta velocità, che vanno
+  quasi il doppio e si annunciano con più anticipo.
 - **Da dietro arriva il temporale**, sempre un po' più veloce: se raggiunge la
   nonna, la corsa finisce. Non si può restare fermi a lungo.
 - Le auto non investono mai la nonna: inchiodano all'ultimo e lei le manda a quel
@@ -25,8 +31,12 @@ funziona offline, non raccoglie dati e non chiede permessi.
   qualche secondo. Il tram però non si ferma per nessuno.
 - Per strada ci sono **caramelle**, **caffè** (passo più veloce), **ciabatte di
   scorta** e, raramente, **cuori**.
-- **Soste**: ogni 120-180 m c'è una piazza con un minigioco a tempo. Se va bene:
-  caramelle e un cuore in regalo; se va male la nonna si offende (un cuore in meno).
+- **Soste**: ogni 120-180 m la strada finisce contro un palazzo grande quanto la
+  piazza, diverso per ogni sosta (la casa rosa della nonna, la posta gialla, la
+  merceria lilla, la trattoria color terracotta). Una freccia indica il portone:
+  si entra da lì, si fa il minigioco a tempo e si esce dall'altra parte. Se va
+  bene: caramelle e un cuore in regalo; se va male la nonna si offende (un cuore
+  in meno).
   - *Il tiramisù della nonna*: ingredienti nell'ordine giusto (si rimescolano).
   - *Salta la fila alla Posta*: tieni premuto per sgattaiolare, lascia quando
     qualcuno si gira.
@@ -50,8 +60,9 @@ funziona offline, non raccoglie dati e non chiede permessi.
 
 - La strada infinita si genera a pezzi, sempre uguale a parità di seme; solo le
   corsie vicine alla nonna vengono simulate.
-- Lo sfondo è disegnato in fette di 6 righe, preparate un attimo prima di
-  entrare in scena (~3 ms l'una) e buttate quando restano indietro.
+- Lo sfondo (palazzi compresi) è disegnato in fette di 6 righe, preparate un
+  attimo prima di entrare in scena (~2,5 ms l'una) e buttate quando restano
+  indietro.
 - Veicoli, arredo e oggetti sono sprite disegnati una volta sola.
 - `npm run perf` (Chromium senza GPU, corsa che sale veloce): **60 fps stabili**,
   simulazione 0,05 ms e disegno 0,7 ms per frame.
@@ -85,7 +96,7 @@ Serve Node.js 22 o più recente.
 ```bash
 npm install
 npm run dev          # gioca nel browser (anche dal telefono, sulla stessa rete)
-npm test             # unit test + il bot deve superare i 250 m su più semi
+npm test             # unit test + il bot deve superare i 250 m, e reggere oltre i 1150 m
 npm run bot          # 12 corse del bot: metri raggiunti, soste, causa di fine
 npm run build        # build web in dist/
 npm run build:web    # un unico file HTML giocabile in dist-web/

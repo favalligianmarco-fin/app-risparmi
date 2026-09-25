@@ -14,7 +14,7 @@ prima di inviare, ricontrolla i link in fondo.
 | **URL della privacy policy** | Obbligatorio per tutte le app. Il testo è pronto in `docs/privacy.html`: va messo online (vedi sezione 5) | da fare |
 | **URL di supporto** | Obbligatorio. Basta una pagina con un contatto email | da fare |
 | Icona 1024×1024 | Pronta: `docs/icona-app-store.png`, già inserita nel progetto Xcode, senza trasparenza come richiesto | ✅ |
-| Screenshot iPhone 6,9" | Pronti: 6 per lingua in `docs/screenshots/it` e `docs/screenshots/en` (1320×2868) | ✅ |
+| Screenshot iPhone 6,9" | Pronti: 7 per lingua in `docs/screenshots/it` e `docs/screenshots/en` (1320×2868) | ✅ |
 | Testi della scheda | Pronti in [scheda-app-store.md](scheda-app-store.md) | ✅ |
 
 ## 2. Cosa si può fare e cosa no: le regole che riguardano questo gioco
@@ -34,6 +34,7 @@ le rispetta già.
 | **4.2 Funzionalità minima** | Un'app non può essere solo un sito web impacchettato | È un gioco completo e offline, con vibrazione nativa, salvataggi nativi, strada infinita e quattro minigiochi. |
 | **4.3 Spam** | Non si accettano copie di giochi già diffusi | Il tema italiano (la nonna, lo scout, il tram, le commissioni), la ciabatta che ferma il traffico, le soste con i minigiochi e le nonne regionali lo distinguono dai cloni di "attraversa la strada". |
 | **5.1.1 Privacy** | Privacy policy obbligatoria nella scheda e raggiungibile dentro l'app | Dentro l'app: Impostazioni → Privacy. Il link va inserito in App Store Connect. |
+| **5.2 Proprietà intellettuale (mezzi)** | Niente marchi altrui | Le auto e i treni sono caricature ispirate ai mezzi italiani più iconici, ma senza nomi, loghi o scritte di case automobilistiche e ferrovie. Nei testi della scheda non vanno usati nomi di modelli o di treni (Panda, 500, Fiorino, Frecciarossa…). |
 | **5.2 Proprietà intellettuale** | Solo contenuti tuoi o con licenza | Grafica e musica sono generate dal codice del gioco; il carattere Fredoka è sotto SIL Open Font License, citata in Impostazioni → Riconoscimenti. |
 
 ### Permessi di iOS

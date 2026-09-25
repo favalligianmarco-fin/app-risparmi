@@ -11,7 +11,7 @@ import { runMinigame } from './minigames';
 import { initNative, notify, setHaptics, tap } from './native';
 import { NONNE, nonnaById } from './nonne';
 import { bgStats } from './render/background';
-import type { BuildingStyle, IconKind } from './render/background';
+import type { BuildingStyle, Theme } from './render/background';
 import { Renderer } from './render/renderer';
 import { Sim } from './sim';
 import type { Dir, OverCause } from './sim';
@@ -19,7 +19,7 @@ import { defaultSave, loadSave, storeSave } from './storage';
 import type { Save } from './storage';
 import { UI } from './ui';
 import type { Controller, HintKind } from './ui';
-import type { Shop, Stop, StopKind } from './world';
+import type { Stop, StopKind } from './world';
 
 type Mode = 'title' | 'menu' | 'playing' | 'paused' | 'stop' | 'over';
 
@@ -29,26 +29,15 @@ const HUD_HEIGHT = 64;
 const perf = { sim: 0, render: 0, bg: bgStats };
 (window as unknown as { __perf: typeof perf }).__perf = perf;
 
-const STOP_LOOK: Record<StopKind, { icon: IconKind; sign: string; ink: string }> = {
-  tiramisu: { icon: 'home', sign: '#e84a4a', ink: '#ffffff' },
-  poste: { icon: 'post', sign: '#f7c948', ink: '#2d3e8c' },
-  ago: { icon: 'spool', sign: '#9f86e0', ink: '#ffffff' },
-  pranzo: { icon: 'trattoria', sign: '#3f8f4f', ink: '#ffffff' },
-};
-const SHOP_LOOK: Record<Shop, { icon: IconKind; sign: string; ink: string }> = {
-  bakery: { icon: 'bakery', sign: '#c98a4b', ink: '#fff4dc' },
-  grocer: { icon: 'market', sign: '#e8763f', ink: '#ffffff' },
-  newsstand: { icon: 'newsstand', sign: '#3d8bd9', ink: '#ffffff' },
-  florist: { icon: 'florist', sign: '#f28bb6', ink: '#ffffff' },
-  gelato: { icon: 'gelato', sign: '#5fd3b0', ink: '#ffffff' },
-  pharmacy: { icon: 'pharmacy', sign: '#3fae5a', ink: '#ffffff' },
+const THEME_OF: Record<StopKind, Theme> = {
+  tiramisu: 'home',
+  poste: 'post',
+  ago: 'haberdashery',
+  pranzo: 'trattoria',
 };
 
-function stopStyle(stop: Stop): { left: BuildingStyle; right: BuildingStyle } {
-  return {
-    left: { label: t.stops[stop.kind], ...STOP_LOOK[stop.kind] },
-    right: { label: t.shops[stop.shop], ...SHOP_LOOK[stop.shop] },
-  };
+function stopStyle(stop: Stop): BuildingStyle {
+  return { theme: THEME_OF[stop.kind], label: t.stops[stop.kind], note: t.stopNotes[stop.kind] };
 }
 
 function safeTop(): number {
@@ -252,6 +241,9 @@ class Game implements Controller {
           break;
         case 'tramWarn':
           this.playSfx('tram');
+          break;
+        case 'tramPass':
+          if (e.train !== 'tram') this.playSfx('horn');
           break;
         case 'splash':
           this.playSfx('splash');

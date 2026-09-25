@@ -1,3 +1,4 @@
+import { DOOR_COL, doorRow } from '../world';
 import type { RowDef, Stop, World } from '../world';
 import { INK, cellText, circle, ctx2d, ellipse, fillInk, makeCanvas, rr, shade } from './paint';
 import type { Ctx } from './paint';
@@ -9,7 +10,7 @@ import type { Ctx } from './paint';
 
 const CHUNK_ROWS = 6;
 /** Altezza delle facciate dei palazzi nelle piazze, in righe. */
-export const BUILDING_HEIGHT = 2.55;
+export const BUILDING_HEIGHT = 3.5;
 
 function hash(a: number, b: number, c = 0): number {
   let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647);
@@ -175,6 +176,32 @@ function paintRowBase(ctx: Ctx, def: RowDef, row: number, sp: Span) {
       ctx.fillStyle = BIKE;
       ctx.fillRect(sp.x0, 0.06, sp.x1 - sp.x0, 0.88);
       break;
+    case 'rail': {
+      // massicciata, traversine di legno e rotaie
+      ctx.fillStyle = '#a39785';
+      ctx.fillRect(sp.x0, 0, sp.x1 - sp.x0, 1);
+      for (let x = Math.floor(sp.x0); x < sp.x1; x++) {
+        for (let k = 0; k < 22; k++) {
+          const v = hash(x, row, k + 300);
+          ctx.fillStyle = v < 0.33 ? '#8d8272' : v < 0.66 ? '#b8ad9b' : '#978c7b';
+          ctx.fillRect(x + hash(x, row, k + 400), 0.04 + hash(x, row, k + 500) * 0.92, 0.07, 0.05);
+        }
+      }
+      for (let x = Math.floor(sp.x0 * 3) / 3; x < sp.x1; x += 1 / 3) {
+        rr(ctx, x + 0.04, 0.14, 0.16, 0.72, 0.03);
+        ctx.fillStyle = '#7a5a44';
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.fillRect(x + 0.04, 0.8, 0.16, 0.06);
+      }
+      for (const ry of [0.32, 0.68]) {
+        ctx.fillStyle = '#4a463f';
+        ctx.fillRect(sp.x0, ry - 0.05, sp.x1 - sp.x0, 0.1);
+        ctx.fillStyle = '#c9ccd3';
+        ctx.fillRect(sp.x0, ry - 0.035, sp.x1 - sp.x0, 0.035);
+      }
+      break;
+    }
     case 'tram': {
       // sede tranviaria in sampietrini, con le rotaie incassate
       ctx.fillStyle = COBBLE;
@@ -255,9 +282,6 @@ function paintRowMarks(ctx: Ctx, rowAt: (i: number) => RowDef | undefined, row: 
 
 // ------------------------------------------------------------------ palazzi
 
-const WALLS = ['#f2c48d', '#e8a488', '#f5dd9d', '#efb3a5', '#e7c9a0', '#f0d0b0'];
-const SHUTTER = '#4f9a5a';
-
 export type IconKind =
   | 'pharmacy'
   | 'bakery'
@@ -269,38 +293,6 @@ export type IconKind =
   | 'home'
   | 'spool'
   | 'trattoria';
-
-function window2(ctx: Ctx, x: number, y: number, w: number, h: number, open: boolean, flower: boolean) {
-  rr(ctx, x - 0.04, y - 0.04, w + 0.08, h + 0.08, 0.03);
-  fillInk(ctx, '#f7efe2', 0.025);
-  rr(ctx, x, y, w, h, 0.02);
-  fillInk(ctx, open ? '#3a3950' : '#bfe6ff', 0.02);
-  if (!open) {
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillRect(x + w * 0.15, y + h * 0.1, w * 0.12, h * 0.6);
-  }
-  // persiane verdi
-  for (const sx of open ? [x - w * 0.5 - 0.02, x + w + 0.02] : [x, x + w / 2]) {
-    rr(ctx, sx, y, w / 2, h, 0.02);
-    fillInk(ctx, SHUTTER, 0.02);
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-    ctx.lineWidth = 0.015;
-    for (let ly = y + 0.08; ly < y + h - 0.02; ly += 0.08) {
-      ctx.beginPath();
-      ctx.moveTo(sx + 0.03, ly);
-      ctx.lineTo(sx + w / 2 - 0.03, ly);
-      ctx.stroke();
-    }
-  }
-  if (flower) {
-    rr(ctx, x - 0.06, y + h - 0.04, w + 0.12, 0.12, 0.03);
-    fillInk(ctx, '#d9774a', 0.02);
-    for (let fx = x; fx <= x + w; fx += w / 3) {
-      circle(ctx, fx, y + h - 0.07, 0.05);
-      fillInk(ctx, hash(Math.round(fx * 10), Math.round(y * 10)) < 0.5 ? '#e84a4a' : '#f28bb6', 0.015);
-    }
-  }
-}
 
 export function destIcon(ctx: Ctx, d: IconKind, x: number, y: number, r: number) {
   ctx.save();
@@ -429,78 +421,346 @@ export function destIcon(ctx: Ctx, d: IconKind, x: number, y: number, r: number)
   ctx.restore();
 }
 
+export type Theme = 'home' | 'post' | 'haberdashery' | 'trattoria';
+
 export interface BuildingStyle {
+  theme: Theme;
+  /** Scritta dell'insegna, già tradotta. */
   label: string;
-  icon: IconKind;
-  sign: string;
-  ink: string;
+  /** Scritta della lavagnetta o della targa accanto al portone. */
+  note: string;
 }
 
-/**
- * Un palazzo della piazza, visto di fronte. y cresce verso il basso, y = BUILDING_HEIGHT
- * è il filo della piazza. `door` è la x della porta.
- */
-function paintBuilding(ctx: Ctx, x0: number, x1: number, door: number, st: BuildingStyle, wall: string, seed: number) {
-  const H = BUILDING_HEIGHT;
-  // tetto e cornicione
-  ctx.fillStyle = '#c8664a';
-  ctx.fillRect(x0 - 0.05, -0.26, x1 - x0 + 0.1, 0.26);
-  ctx.fillStyle = '#b55a40';
-  for (let x = x0; x < x1; x += 0.22) ctx.fillRect(x, -0.26, 0.04, 0.26);
-  ctx.fillStyle = wall;
-  ctx.fillRect(x0, 0, x1 - x0, H);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.03;
-  ctx.strokeRect(x0, 0, x1 - x0, H);
-  ctx.fillStyle = shade(wall, -0.15);
-  ctx.fillRect(x0 - 0.05, 0, x1 - x0 + 0.1, 0.14);
-  // finestre del primo piano
-  const n = Math.max(1, Math.floor((x1 - x0) / 1.1));
-  const pitch = (x1 - x0) / n;
-  for (let c = 0; c < n; c++) {
-    const wx = x0 + pitch * c + pitch / 2 - 0.2;
-    window2(ctx, wx, 0.28, 0.4, 0.58, hash(seed, c, 3) < 0.3, hash(seed, c, 4) > 0.5);
-  }
-  // insegna
-  rr(ctx, x0 + 0.12, 1.02, x1 - x0 - 0.24, 0.44, 0.08);
-  fillInk(ctx, st.sign);
-  cellText(ctx, st.label, (x0 + x1) / 2, 1.245, 0.26, 700, st.ink, x1 - x0 - 0.8);
-  destIcon(ctx, st.icon, x0 + 0.34, 1.24, 0.13);
-  destIcon(ctx, st.icon, x1 - 0.34, 1.24, 0.13);
-  // tenda a strisce
-  const aw = 1.52;
-  const stripes = 6;
-  for (let i = 0; i < stripes; i++) {
-    const a = x0 + 0.08 + (i * (x1 - x0 - 0.16)) / stripes;
-    const b = x0 + 0.08 + ((i + 1) * (x1 - x0 - 0.16)) / stripes;
+const THEMES: Record<Theme, { wall: string; sign: string; ink: string; awning: string[]; icon: IconKind; shutter: string }> = {
+  home: { wall: '#f4b6a6', sign: '#8a5a3c', ink: '#fff4dc', awning: ['#f28bb6', '#ffffff'], icon: 'home', shutter: '#4f9a5a' },
+  post: { wall: '#f5d76e', sign: '#2d3e8c', ink: '#f7c948', awning: ['#2d3e8c', '#ffffff'], icon: 'post', shutter: '#3d6fb8' },
+  haberdashery: { wall: '#cbb8ea', sign: '#7b4fc4', ink: '#ffffff', awning: ['#9f86e0', '#ffffff'], icon: 'spool', shutter: '#5b3f8c' },
+  trattoria: { wall: '#e8a07e', sign: '#2f7a45', ink: '#fff4dc', awning: ['#3fae5a', '#ffffff', '#e84a4a'], icon: 'trattoria', shutter: '#2f7a45' },
+};
+
+/** Finestra con persiane del colore del palazzo, tenda di pizzo e, a volte, gerani. */
+function palWindow(ctx: Ctx, x: number, y: number, w: number, h: number, shutter: string, lace: boolean, flowers: boolean) {
+  rr(ctx, x - 0.05, y - 0.05, w + 0.1, h + 0.1, 0.03);
+  fillInk(ctx, '#f7efe2', 0.025);
+  rr(ctx, x, y, w, h, 0.02);
+  fillInk(ctx, '#9fc8e6', 0.02);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillRect(x + w * 0.15, y + h * 0.1, w * 0.1, h * 0.55);
+  if (lace) {
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(a, aw);
-    ctx.lineTo(b, aw);
-    ctx.lineTo(b, aw + 0.26);
-    ctx.quadraticCurveTo((a + b) / 2, aw + 0.38, a, aw + 0.26);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + h * 0.28);
+    for (let k = 4; k >= 0; k--) ctx.quadraticCurveTo(x + (w * (k + 0.5)) / 5, y + h * 0.4, x + (w * k) / 5, y + h * 0.28);
     ctx.closePath();
-    ctx.fillStyle = i % 2 ? '#ffffff' : st.sign;
+    ctx.fill();
+  }
+  for (const sx of [x - w * 0.52, x + w + 0.02]) {
+    rr(ctx, sx, y, w * 0.5, h, 0.02);
+    fillInk(ctx, shutter, 0.02);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 0.014;
+    ctx.beginPath();
+    for (let ly = y + 0.07; ly < y + h - 0.02; ly += 0.07) {
+      ctx.moveTo(sx + 0.025, ly);
+      ctx.lineTo(sx + w * 0.5 - 0.025, ly);
+    }
+    ctx.stroke();
+  }
+  if (flowers) {
+    rr(ctx, x - 0.06, y + h - 0.02, w + 0.12, 0.11, 0.03);
+    fillInk(ctx, '#d9774a', 0.02);
+    for (let i = 0; i < 4; i++) {
+      const fx = x + (i * w) / 3;
+      circle(ctx, fx, y + h - 0.05, 0.05);
+      fillInk(ctx, i % 2 ? '#f28bb6' : '#e84a4a', 0.014);
+    }
+  }
+}
+
+function awning(ctx: Ctx, x0: number, x1: number, y: number, colors: string[]) {
+  const n = Math.max(3, Math.round((x1 - x0) / 0.22));
+  for (let i = 0; i < n; i++) {
+    const a = x0 + ((x1 - x0) * i) / n;
+    const b = x0 + ((x1 - x0) * (i + 1)) / n;
+    ctx.beginPath();
+    ctx.moveTo(a, y);
+    ctx.lineTo(b, y);
+    ctx.lineTo(b, y + 0.24);
+    ctx.quadraticCurveTo((a + b) / 2, y + 0.34, a, y + 0.24);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
     ctx.fill();
   }
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.025;
-  ctx.strokeRect(x0 + 0.08, aw, x1 - x0 - 0.16, 0.26);
-  // vetrina e porta
-  const vx = door < (x0 + x1) / 2 ? door + 0.45 : x0 + 0.2;
-  const vw = Math.min(1.1, x1 - x0 - 1.2);
-  rr(ctx, vx, H - 0.72, vw, 0.56, 0.05);
+  ctx.strokeRect(x0, y, x1 - x0, 0.24);
+}
+
+/** Vetrina a tema: quello che c'è dentro racconta il negozio. */
+function vitrine(ctx: Ctx, x: number, y: number, w: number, h: number, theme: Theme, seed: number) {
+  rr(ctx, x, y, w, h, 0.04);
   fillInk(ctx, '#bfe6ff');
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillRect(vx + 0.1, H - 0.66, 0.08, 0.42);
-  destIcon(ctx, st.icon, vx + vw / 2, H - 0.44, 0.16);
-  rr(ctx, door - 0.3, H - 0.95, 0.6, 0.95, 0.06);
-  fillInk(ctx, '#7a4b2a');
-  rr(ctx, door - 0.22, H - 0.87, 0.44, 0.45, 0.04);
-  fillInk(ctx, '#bfe6ff', 0.02);
-  circle(ctx, door + 0.17, H - 0.35, 0.03);
-  fillInk(ctx, '#f7c948', 0.015);
-  ctx.fillStyle = shade(wall, -0.2);
-  ctx.fillRect(x0, H - 0.14, x1 - x0, 0.14);
+  ctx.save();
+  rr(ctx, x, y, w, h, 0.04);
+  ctx.clip();
+  if (theme === 'haberdashery') {
+    // rocchetti di filo colorati e bottoni
+    const cols = ['#e84a4a', '#f7c948', '#3d8bd9', '#3fae5a', '#f28bb6', '#9f86e0'];
+    for (let i = 0; i < 6; i++) {
+      const cx = x + 0.14 + (i % 3) * ((w - 0.28) / 2);
+      const cy = y + h * 0.34 + Math.floor(i / 3) * h * 0.36;
+      rr(ctx, cx - 0.07, cy - 0.1, 0.14, 0.2, 0.02);
+      fillInk(ctx, '#c9975a', 0.015);
+      rr(ctx, cx - 0.055, cy - 0.075, 0.11, 0.15, 0.02);
+      fillInk(ctx, cols[(i + seed) % cols.length], 0.012);
+    }
+  } else if (theme === 'trattoria') {
+    // bottiglie d'olio e forme di formaggio
+    for (let i = 0; i < 3; i++) {
+      const cx = x + 0.18 + i * ((w - 0.36) / 2);
+      circle(ctx, cx, y + h * 0.72, 0.12);
+      fillInk(ctx, '#f2c14e', 0.018);
+      rr(ctx, cx - 0.035, y + h * 0.18, 0.07, h * 0.4, 0.02);
+      fillInk(ctx, '#6f8f3a', 0.015);
+    }
+  } else if (theme === 'post') {
+    // pacchi e lettere
+    rr(ctx, x + 0.1, y + h * 0.45, w * 0.4, h * 0.45, 0.02);
+    fillInk(ctx, '#c9975a', 0.018);
+    rr(ctx, x + w * 0.55, y + h * 0.3, w * 0.3, h * 0.25, 0.02);
+    fillInk(ctx, '#ffffff', 0.018);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 0.012;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.55, y + h * 0.3);
+    ctx.lineTo(x + w * 0.7, y + h * 0.43);
+    ctx.lineTo(x + w * 0.85, y + h * 0.3);
+    ctx.stroke();
+  } else {
+    // casa: tendine e una pianta
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, w * 0.28, h);
+    ctx.fillRect(x + w * 0.72, y, w * 0.28, h);
+    rr(ctx, x + w * 0.4, y + h * 0.62, w * 0.2, h * 0.3, 0.02);
+    fillInk(ctx, '#d9774a', 0.015);
+    circle(ctx, x + w * 0.5, y + h * 0.5, 0.13);
+    fillInk(ctx, '#5fb06a', 0.015);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(x + 0.08, y + 0.05, 0.06, h - 0.1);
+  ctx.restore();
+}
+
+/**
+ * Il palazzo della sosta, largo quanto la strada, con il portone al centro.
+ * y cresce verso il basso: 0 è il cornicione, BUILDING_HEIGHT il filo della piazza.
+ */
+function paintPalazzo(ctx: Ctx, x0: number, x1: number, st: BuildingStyle, seed: number) {
+  const H = BUILDING_HEIGHT;
+  const th = THEMES[st.theme];
+  const door = DOOR_COL + 0.5;
+  // tetto di coppi, comignoli e antenna
+  ctx.fillStyle = '#c8664a';
+  ctx.fillRect(x0 - 0.1, -0.34, x1 - x0 + 0.2, 0.34);
+  ctx.fillStyle = '#b55a40';
+  for (let x = x0; x < x1; x += 0.2) ctx.fillRect(x, -0.34, 0.035, 0.34);
+  for (const cx of [1.4, 7.6]) {
+    rr(ctx, cx - 0.14, -0.62, 0.28, 0.34, 0.03);
+    fillInk(ctx, '#b55a40');
+    rr(ctx, cx - 0.18, -0.68, 0.36, 0.1, 0.03);
+    fillInk(ctx, '#9e4d37');
+  }
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.022;
+  ctx.beginPath();
+  ctx.moveTo(6.2, -0.34);
+  ctx.lineTo(6.2, -0.8);
+  ctx.moveTo(5.95, -0.72);
+  ctx.lineTo(6.45, -0.72);
+  ctx.moveTo(6.02, -0.62);
+  ctx.lineTo(6.38, -0.62);
+  ctx.stroke();
+
+  // muri
+  ctx.fillStyle = th.wall;
+  ctx.fillRect(x0, 0, x1 - x0, H);
+  // cornicione con i dentelli
+  ctx.fillStyle = shade(th.wall, -0.16);
+  ctx.fillRect(x0 - 0.1, 0, x1 - x0 + 0.2, 0.12);
+  ctx.fillStyle = shade(th.wall, 0.25);
+  for (let x = x0; x < x1; x += 0.16) ctx.fillRect(x, 0.12, 0.08, 0.06);
+  // marcapiani
+  ctx.fillStyle = shade(th.wall, 0.3);
+  ctx.fillRect(x0, 0.98, x1 - x0, 0.07);
+  ctx.fillRect(x0, 1.9, x1 - x0, 0.08);
+
+  // finestre in asse col portone, una ogni campata e mezza
+  const bays: number[] = [];
+  for (let k = -6; k <= 6; k++) {
+    const x = door + k * 1.5;
+    if (x > x0 + 0.4 && x < x1 - 0.4) bays.push(x);
+  }
+  // secondo piano
+  for (const x of bays) {
+    const r = hash(seed, Math.round(x * 10), 1);
+    palWindow(ctx, x - 0.22, 0.3, 0.44, 0.54, th.shutter, st.theme === 'home' || r < 0.3, r > 0.55);
+  }
+  // primo piano, con il balcone sopra il portone
+  for (const x of bays) {
+    if (Math.abs(x - door) < 0.6) continue;
+    const r = hash(seed, Math.round(x * 10), 2);
+    palWindow(ctx, x - 0.24, 1.18, 0.48, 0.58, th.shutter, st.theme === 'home' || r < 0.25, r > 0.35);
+  }
+  palWindow(ctx, door - 0.24, 1.14, 0.48, 0.62, th.shutter, st.theme === 'home', false);
+  rr(ctx, door - 0.7, 1.74, 1.4, 0.09, 0.02);
+  fillInk(ctx, '#e9e2d4', 0.022);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.02;
+  ctx.strokeRect(door - 0.66, 1.52, 1.32, 0.22);
+  ctx.beginPath();
+  for (let x = door - 0.6; x < door + 0.62; x += 0.12) {
+    ctx.moveTo(x, 1.52);
+    ctx.lineTo(x, 1.74);
+  }
+  ctx.stroke();
+  for (const fx of [door - 0.55, door + 0.55]) {
+    rr(ctx, fx - 0.1, 1.42, 0.2, 0.12, 0.03);
+    fillInk(ctx, '#d9774a', 0.018);
+    circle(ctx, fx, 1.4, 0.09);
+    fillInk(ctx, '#5fb06a', 0.018);
+    circle(ctx, fx - 0.03, 1.36, 0.035);
+    fillInk(ctx, '#e84a4a', 0.01);
+  }
+  if (st.theme === 'home') {
+    // i panni stesi della nonna
+    ctx.strokeStyle = '#6b6b7a';
+    ctx.lineWidth = 0.015;
+    ctx.beginPath();
+    ctx.moveTo(1.3, 0.86);
+    ctx.quadraticCurveTo(2.25, 1.0, 3.2, 0.86);
+    ctx.stroke();
+    ['#f28bb6', '#ffffff', '#5aa9f0', '#f7c948'].forEach((c, i) => {
+      rr(ctx, 1.55 + i * 0.42, 0.9 + Math.sin(i) * 0.01, 0.26, 0.3, 0.03);
+      fillInk(ctx, c, 0.016);
+    });
+  }
+
+  // piano terra a bugnato
+  const g0 = 1.98;
+  ctx.fillStyle = shade(th.wall, -0.08);
+  ctx.fillRect(x0, g0, x1 - x0, H - g0);
+  ctx.strokeStyle = shade(th.wall, -0.22);
+  ctx.lineWidth = 0.015;
+  ctx.beginPath();
+  for (let y = g0 + 0.2; y < H; y += 0.2) {
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    const off = Math.round((y - g0) / 0.2) % 2 ? 0.3 : 0;
+    for (let x = x0 + off; x < x1; x += 0.6) {
+      ctx.moveTo(x, y - 0.2);
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+
+  // insegna sopra il portone
+  const sw = 3.6;
+  rr(ctx, door - sw / 2, g0 + 0.06, sw, 0.42, 0.08);
+  fillInk(ctx, th.sign);
+  ctx.strokeStyle = shade(th.sign, 0.35);
+  ctx.lineWidth = 0.02;
+  rr(ctx, door - sw / 2 + 0.05, g0 + 0.11, sw - 0.1, 0.32, 0.06);
+  ctx.stroke();
+  cellText(ctx, st.label, door, g0 + 0.27, 0.25, 700, th.ink, sw - 0.9);
+  destIcon(ctx, th.icon, door - sw / 2 + 0.26, g0 + 0.27, 0.12);
+  destIcon(ctx, th.icon, door + sw / 2 - 0.26, g0 + 0.27, 0.12);
+
+  // portone: stipiti di pietra, battenti aperti e luce calda dentro
+  const dw = 1.2;
+  const dt = H - 1.02;
+  rr(ctx, door - dw / 2 - 0.12, dt - 0.1, dw + 0.24, H - dt + 0.1, 0.05);
+  fillInk(ctx, '#e9e2d4');
+  const glow = ctx.createLinearGradient(0, dt, 0, H);
+  glow.addColorStop(0, '#6b4a2e');
+  glow.addColorStop(1, '#f2c77a');
+  ctx.fillStyle = glow;
+  ctx.fillRect(door - dw / 2, dt, dw, H - dt);
+  ctx.fillStyle = 'rgba(255,236,170,0.45)';
+  ctx.beginPath();
+  ctx.moveTo(door - 0.3, H);
+  ctx.lineTo(door + 0.3, H);
+  ctx.lineTo(door + 0.18, dt + 0.3);
+  ctx.lineTo(door - 0.18, dt + 0.3);
+  ctx.closePath();
+  ctx.fill();
+  for (const sgn of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(door + (sgn * dw) / 2, dt);
+    ctx.lineTo(door + sgn * (dw / 2 - 0.2), dt + 0.08);
+    ctx.lineTo(door + sgn * (dw / 2 - 0.2), H - 0.02);
+    ctx.lineTo(door + (sgn * dw) / 2, H);
+    ctx.closePath();
+    fillInk(ctx, '#7a4b2a', 0.025);
+    circle(ctx, door + sgn * (dw / 2 - 0.14), dt + 0.55, 0.025);
+    fillInk(ctx, '#f7c948', 0.012);
+  }
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.03;
+  ctx.strokeRect(door - dw / 2, dt, dw, H - dt);
+  // lanterne ai lati
+  for (const sgn of [-1, 1]) {
+    const lx = door + sgn * (dw / 2 + 0.34);
+    ctx.fillStyle = INK;
+    ctx.fillRect(lx - 0.012, dt - 0.02, 0.024, 0.12);
+    rr(ctx, lx - 0.07, dt + 0.08, 0.14, 0.18, 0.03);
+    fillInk(ctx, '#ffe89a', 0.018);
+  }
+
+  // vetrine laterali con le tende
+  const vw = Math.min(1.5, door - dw / 2 - 0.8 - 0.4);
+  for (const vx of [door - dw / 2 - 0.6 - vw, door + dw / 2 + 0.6]) {
+    awning(ctx, vx - 0.08, vx + vw + 0.08, g0 + 0.58, th.awning);
+    vitrine(ctx, vx, g0 + 0.9, vw, 0.56, st.theme, seed);
+  }
+  // un dettaglio per ogni palazzo
+  if (st.theme === 'post') {
+    // cassetta postale rossa
+    const bx = door + dw / 2 + 0.3;
+    rr(ctx, bx - 0.13, H - 0.52, 0.26, 0.36, 0.06);
+    fillInk(ctx, '#e0443c');
+    ctx.fillStyle = INK;
+    ctx.fillRect(bx - 0.08, H - 0.44, 0.16, 0.025);
+    ctx.fillStyle = '#4a3b3b';
+    ctx.fillRect(bx - 0.02, H - 0.16, 0.04, 0.16);
+  } else if (st.theme === 'trattoria' || st.theme === 'haberdashery') {
+    // lavagnetta sul marciapiede
+    const bx = door - dw / 2 - 0.34;
+    ctx.strokeStyle = '#8a5a3c';
+    ctx.lineWidth = 0.03;
+    ctx.beginPath();
+    ctx.moveTo(bx - 0.14, H);
+    ctx.lineTo(bx, H - 0.5);
+    ctx.lineTo(bx + 0.14, H);
+    ctx.stroke();
+    rr(ctx, bx - 0.15, H - 0.5, 0.3, 0.34, 0.03);
+    fillInk(ctx, '#2f3b36', 0.02);
+    cellText(ctx, st.note, bx, H - 0.33, 0.07, 600, '#ffffff', 0.26);
+  } else {
+    // targa di ceramica col nome della nonna
+    const bx = door + dw / 2 + 0.3;
+    rr(ctx, bx - 0.16, dt + 0.34, 0.32, 0.2, 0.04);
+    fillInk(ctx, '#fdfaf3', 0.02);
+    ctx.strokeStyle = '#3d6fb8';
+    ctx.lineWidth = 0.015;
+    rr(ctx, bx - 0.13, dt + 0.37, 0.26, 0.14, 0.03);
+    ctx.stroke();
+    cellText(ctx, st.note, bx, dt + 0.44, 0.06, 600, '#3d6fb8', 0.22);
+  }
+  // zoccolo
+  ctx.fillStyle = shade(th.wall, -0.28);
+  ctx.fillRect(x0, H - 0.1, x1 - x0, 0.1);
 }
 
 /** Tetti di coppi sotto il marciapiede di partenza: il quartiere della nonna. y cresce verso il basso da 0. */
@@ -571,11 +831,6 @@ interface Chunk {
   canvas: HTMLCanvasElement;
 }
 
-export interface StopStyle {
-  left: BuildingStyle;
-  right: BuildingStyle;
-}
-
 /**
  * Sfondo della strada infinita: le fette si disegnano quando stanno per entrare
  * in scena e si buttano quando sono rimaste indietro.
@@ -589,7 +844,7 @@ export class Background {
     private readonly s: number,
     private readonly xLeft: number,
     private readonly xRight: number,
-    private readonly styleOf: (stop: Stop) => StopStyle,
+    private readonly styleOf: (stop: Stop) => BuildingStyle,
   ) {}
 
   private rowAt = (i: number): RowDef | undefined => (i < 0 ? undefined : this.world.row(i));
@@ -615,15 +870,12 @@ export class Background {
         paintRowMarks(ctx, this.rowAt, r, sp);
       }
     }
-    // palazzi delle piazze (possono sporgere nelle fette vicine)
+    // palazzi delle soste (sporgono nelle fette vicine)
     for (const stop of this.world.stops) {
-      const base = stop.entry + 1;
-      if (base > top + 0.5 || base + BUILDING_HEIGHT + 0.3 < y0) continue;
-      const st = this.styleOf(stop);
+      const base = doorRow(stop);
+      if (base > top + 0.5 || base + BUILDING_HEIGHT + 0.9 < y0) continue;
       ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - (base + BUILDING_HEIGHT)) * s);
-      const seed = stop.entry * 13 + 5;
-      paintBuilding(ctx, Math.min(-0.2, this.xLeft - 0.5), 3, 2.35, st.left, WALLS[stop.entry % WALLS.length], seed);
-      paintBuilding(ctx, 6, Math.max(9.2, this.xRight + 0.5), 6.65, st.right, WALLS[(stop.entry + 3) % WALLS.length], seed + 1);
+      paintPalazzo(ctx, this.xLeft - 0.5, this.xRight + 0.5, this.styleOf(stop), stop.entry * 13 + 5);
     }
     // tetti sotto la partenza
     if (y0 < 0) {

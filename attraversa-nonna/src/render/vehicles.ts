@@ -50,68 +50,145 @@ function glassStreak(ctx: Ctx, x: number, y: number, w: number, h: number) {
   ctx.restore();
 }
 
-function drawCar(ctx: Ctx, color: string) {
-  const L = VEHICLE_LENGTH.car;
+/** Utilitaria squadrata anni '80: tutta spigoli, fascia di plastica grigia e vetri piatti. */
+function drawBoxy(ctx: Ctx, color: string) {
+  const L = VEHICLE_LENGTH.boxy;
   const hl = L / 2;
   shadow(ctx, L);
-  wheel(ctx, -hl * 0.55, 0.26);
-  wheel(ctx, hl * 0.55, 0.26);
-  // fiancata
-  rr(ctx, -hl, -0.08, L, 0.36, 0.16);
+  wheel(ctx, -hl * 0.56, 0.26, 0.12, 0.085);
+  wheel(ctx, hl * 0.56, 0.26, 0.12, 0.085);
+  // fiancata dritta con la fascia di plastica
+  rr(ctx, -hl, -0.08, L, 0.36, 0.05);
   fillInk(ctx, shade(color, -0.22));
-  // paraurti
-  ctx.fillStyle = '#d9d6e3';
-  rr(ctx, hl - 0.07, 0.02, 0.07, 0.2, 0.03);
-  ctx.fill();
-  rr(ctx, -hl, 0.02, 0.07, 0.2, 0.03);
-  ctx.fill();
-  lights(ctx, L, 0.07);
-  // tetto/carrozzeria vista dall'alto
-  rr(ctx, -hl, -0.42, L, 0.5, 0.22);
+  ctx.fillStyle = '#6b6b78';
+  ctx.fillRect(-hl + 0.02, 0.13, L - 0.04, 0.1);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(-hl + 0.02, 0.13, L - 0.04, 0.02);
+  // fari squadrati
+  rr(ctx, hl - 0.09, -0.02, 0.07, 0.11, 0.015);
+  fillInk(ctx, '#fff4b8', 0.02);
+  rr(ctx, -hl + 0.02, -0.02, 0.07, 0.11, 0.015);
+  fillInk(ctx, '#e0443c', 0.02);
+  // carrozzeria vista dall'alto: un bel rettangolo
+  rr(ctx, -hl, -0.42, L, 0.5, 0.06);
   fillInk(ctx, color);
-  // abitacolo
-  rr(ctx, -hl * 0.55, -0.37, hl * 1.15, 0.4, 0.14);
-  fillInk(ctx, shade(color, 0.15), 0.025);
-  // parabrezza e lunotto
-  rr(ctx, hl * 0.28, -0.35, 0.2, 0.36, 0.08);
-  fillInk(ctx, GLASS, 0.025);
-  glassStreak(ctx, hl * 0.28, -0.35, 0.2, 0.36);
-  rr(ctx, -hl * 0.52, -0.34, 0.14, 0.34, 0.06);
-  fillInk(ctx, GLASS_DARK, 0.025);
-  // riflesso sul cofano
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  rr(ctx, hl * 0.62, -0.36, 0.12, 0.08, 0.04);
-  ctx.fill();
+  // cofano con la presa d'aria spostata di lato
+  ctx.fillStyle = '#3a3950';
+  ctx.fillRect(hl - 0.2, -0.36, 0.1, 0.11);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let i = 0; i < 3; i++) ctx.fillRect(hl - 0.19, -0.35 + i * 0.035, 0.08, 0.012);
+  // tetto piatto con due nervature
+  rr(ctx, -hl * 0.62, -0.38, hl * 1.2, 0.42, 0.03);
+  fillInk(ctx, shade(color, 0.14), 0.025);
+  ctx.strokeStyle = shade(color, -0.1);
+  ctx.lineWidth = 0.018;
+  ctx.beginPath();
+  ctx.moveTo(-hl * 0.45, -0.3);
+  ctx.lineTo(hl * 0.4, -0.3);
+  ctx.moveTo(-hl * 0.45, -0.04);
+  ctx.lineTo(hl * 0.4, -0.04);
+  ctx.stroke();
+  // vetri piatti e dritti
+  rr(ctx, hl * 0.58 - 0.02, -0.37, 0.1, 0.4, 0.015);
+  fillInk(ctx, GLASS, 0.022);
+  glassStreak(ctx, hl * 0.58 - 0.02, -0.37, 0.1, 0.4);
+  rr(ctx, -hl * 0.62 - 0.02, -0.36, 0.08, 0.38, 0.015);
+  fillInk(ctx, GLASS_DARK, 0.022);
 }
 
-function drawVan(ctx: Ctx, color: string, accent: string) {
-  const L = VEHICLE_LENGTH.van;
+/** Piccola e tondeggiante, con il tettuccio di tela arrotolabile. */
+function drawBubble(ctx: Ctx, color: string) {
+  const L = VEHICLE_LENGTH.bubble;
   const hl = L / 2;
-  shadow(ctx, L);
-  wheel(ctx, -hl * 0.62, 0.27);
-  wheel(ctx, hl * 0.6, 0.27);
-  rr(ctx, -hl, -0.1, L, 0.38, 0.1);
+  shadow(ctx, L, 0.27);
+  wheel(ctx, -hl * 0.55, 0.24, 0.11, 0.08);
+  wheel(ctx, hl * 0.55, 0.24, 0.11, 0.08);
+  rr(ctx, -hl, -0.06, L, 0.33, 0.16);
   fillInk(ctx, shade(color, -0.2));
-  ctx.fillStyle = accent;
-  ctx.fillRect(-hl + 0.1, 0.02, L - 0.55, 0.08);
-  lights(ctx, L, 0.08);
-  // cassone
-  rr(ctx, -hl, -0.44, L - 0.5, 0.54, 0.08);
+  // paraurti cromati e fari tondi
+  ctx.fillStyle = '#e6e6ee';
+  rr(ctx, hl - 0.05, 0.03, 0.06, 0.18, 0.03);
+  ctx.fill();
+  rr(ctx, -hl - 0.01, 0.03, 0.06, 0.18, 0.03);
+  ctx.fill();
+  circle(ctx, hl - 0.08, 0.02, 0.055);
+  fillInk(ctx, '#fff4b8', 0.02);
+  circle(ctx, -hl + 0.07, 0.03, 0.035);
+  fillInk(ctx, '#e0443c', 0.018);
+  // carrozzeria a uovo
+  rr(ctx, -hl, -0.42, L, 0.5, 0.24);
   fillInk(ctx, color);
+  // cofano con i baffi cromati
+  ctx.strokeStyle = '#e6e6ee';
+  ctx.lineWidth = 0.02;
+  ctx.beginPath();
+  ctx.moveTo(hl - 0.06, -0.26);
+  ctx.quadraticCurveTo(hl - 0.14, -0.17, hl - 0.06, -0.08);
+  ctx.stroke();
+  // abitacolo e tetto di tela
+  rr(ctx, -hl * 0.55, -0.37, hl * 1.08, 0.4, 0.15);
+  fillInk(ctx, shade(color, 0.14), 0.024);
+  rr(ctx, -hl * 0.42, -0.32, hl * 0.72, 0.3, 0.05);
+  fillInk(ctx, '#e8dcc0', 0.02);
+  ctx.strokeStyle = 'rgba(120,100,70,0.45)';
+  ctx.lineWidth = 0.015;
+  ctx.beginPath();
+  for (let i = 1; i < 4; i++) {
+    const x = -hl * 0.42 + (i * hl * 0.72) / 4;
+    ctx.moveTo(x, -0.31);
+    ctx.lineTo(x, -0.03);
+  }
+  ctx.stroke();
+  rr(ctx, hl * 0.42, -0.35, 0.12, 0.36, 0.08);
+  fillInk(ctx, GLASS, 0.022);
+  glassStreak(ctx, hl * 0.42, -0.35, 0.12, 0.36);
+  // griglia del motore dietro
+  ctx.strokeStyle = shade(color, -0.3);
+  ctx.lineWidth = 0.014;
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    ctx.moveTo(-hl + 0.07, -0.3 + i * 0.06);
+    ctx.lineTo(-hl + 0.14, -0.3 + i * 0.06);
+  }
+  ctx.stroke();
+}
+
+/** Furgoncino da consegne: cabina bassa e cassone alto squadrato. */
+function drawFiorino(ctx: Ctx, color: string, accent: string) {
+  const L = VEHICLE_LENGTH.fiorino;
+  const hl = L / 2;
+  const cab = 0.6;
+  shadow(ctx, L);
+  wheel(ctx, -hl * 0.6, 0.27, 0.12, 0.085);
+  wheel(ctx, hl * 0.6, 0.27, 0.12, 0.085);
+  // fiancata: il cassone è più alto della cabina
+  rr(ctx, -hl, -0.16, L - cab, 0.44, 0.05);
+  fillInk(ctx, shade(color, -0.18));
+  ctx.fillStyle = accent;
+  ctx.fillRect(-hl + 0.06, 0.02, L - cab - 0.12, 0.06);
+  rr(ctx, hl - cab - 0.02, -0.06, cab + 0.02, 0.34, 0.1);
+  fillInk(ctx, shade(color, -0.22));
+  ctx.fillStyle = '#6b6b78';
+  ctx.fillRect(hl - cab, 0.15, cab - 0.02, 0.07);
+  rr(ctx, hl - 0.09, 0.0, 0.07, 0.1, 0.02);
+  fillInk(ctx, '#fff4b8', 0.02);
+  // tetto della cabina
+  rr(ctx, hl - cab - 0.02, -0.4, cab + 0.02, 0.46, 0.12);
+  fillInk(ctx, color);
+  rr(ctx, hl - 0.3, -0.36, 0.14, 0.38, 0.05);
+  fillInk(ctx, GLASS, 0.022);
+  glassStreak(ctx, hl - 0.3, -0.36, 0.14, 0.38);
+  // tetto del cassone, più in alto
+  rr(ctx, -hl, -0.52, L - cab + 0.02, 0.5, 0.05);
+  fillInk(ctx, shade(color, 0.08));
   ctx.strokeStyle = shade(color, -0.12);
-  ctx.lineWidth = 0.025;
-  for (let x = -hl + 0.25; x < hl - 0.6; x += 0.25) {
+  ctx.lineWidth = 0.02;
+  for (let x = -hl + 0.2; x < hl - cab - 0.05; x += 0.2) {
     ctx.beginPath();
-    ctx.moveTo(x, -0.4);
-    ctx.lineTo(x, 0.06);
+    ctx.moveTo(x, -0.48);
+    ctx.lineTo(x, -0.06);
     ctx.stroke();
   }
-  // cabina
-  rr(ctx, hl - 0.56, -0.4, 0.56, 0.48, 0.16);
-  fillInk(ctx, shade(color, 0.06));
-  rr(ctx, hl - 0.3, -0.36, 0.2, 0.4, 0.07);
-  fillInk(ctx, GLASS, 0.025);
-  glassStreak(ctx, hl - 0.3, -0.36, 0.2, 0.4);
 }
 
 function drawBus(ctx: Ctx, color: string) {
@@ -286,6 +363,109 @@ function drawTram(ctx: Ctx) {
   ctx.fill();
 }
 
+/** Carrozze di un treno visto dall'alto: tetto, finestrini sulla fiancata, pantografo. */
+function trainBody(ctx: Ctx, L: number, body: string, stripe: string, stripe2: string, cars: number) {
+  const hl = L / 2;
+  shadow(ctx, L, 0.34);
+  rr(ctx, -hl, -0.2, L, 0.52, 0.18);
+  fillInk(ctx, shade(body, -0.1));
+  ctx.fillStyle = stripe;
+  ctx.fillRect(-hl + 0.12, 0.13, L - 0.24, 0.07);
+  ctx.fillStyle = stripe2;
+  ctx.fillRect(-hl + 0.12, 0.2, L - 0.24, 0.04);
+  const carL = L / cars;
+  for (let c = 0; c < cars; c++) {
+    const x0 = -hl + c * carL;
+    for (let x = x0 + 0.35; x < x0 + carL - 0.4; x += 0.46) {
+      rr(ctx, x, -0.13, 0.34, 0.2, 0.05);
+      fillInk(ctx, '#3a4a66', 0.018);
+    }
+    if (c > 0) {
+      ctx.fillStyle = INK;
+      ctx.fillRect(x0 - 0.02, -0.2, 0.04, 0.5);
+    }
+    // porte con il bordo giallo
+    rr(ctx, x0 + carL * 0.5 - 0.14, -0.16, 0.28, 0.44, 0.03);
+    fillInk(ctx, shade(body, -0.25), 0.02);
+    ctx.fillStyle = '#f7c948';
+    ctx.fillRect(x0 + carL * 0.5 - 0.14, 0.24, 0.28, 0.03);
+  }
+  // tetto
+  rr(ctx, -hl, -0.5, L, 0.34, 0.14);
+  fillInk(ctx, '#d9dce4');
+  for (let c = 0; c < cars; c++) {
+    const cx = -hl + c * carL + carL / 2;
+    rr(ctx, cx - 0.4, -0.46, 0.8, 0.24, 0.05);
+    fillInk(ctx, '#b7bbc6', 0.02);
+  }
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.03;
+  ctx.beginPath();
+  ctx.moveTo(-0.3, -0.36);
+  ctx.lineTo(0, -0.6);
+  ctx.lineTo(0.3, -0.36);
+  ctx.moveTo(-0.18, -0.6);
+  ctx.lineTo(0.18, -0.6);
+  ctx.stroke();
+}
+
+/** Treno regionale: bianco, fasce verde e blu, musi tondi. */
+function drawRegional(ctx: Ctx) {
+  const L = VEHICLE_LENGTH.regional;
+  const hl = L / 2;
+  trainBody(ctx, L, '#f4f5f7', '#3fae5a', '#3d6fb8', 3);
+  for (const sgn of [1, -1]) {
+    rr(ctx, sgn > 0 ? hl - 0.34 : -hl + 0.06, -0.47, 0.28, 0.62, 0.12);
+    fillInk(ctx, '#2d3440', 0.025);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(sgn > 0 ? hl - 0.28 : -hl + 0.12, -0.42, 0.05, 0.5);
+  }
+  ctx.fillStyle = '#fff4b8';
+  circle(ctx, hl - 0.05, 0.2, 0.045);
+  ctx.fill();
+}
+
+/** Treno ad alta velocità: argento, muso lungo e affusolato, fascia rossa. */
+function drawFast(ctx: Ctx) {
+  const L = VEHICLE_LENGTH.fast;
+  const hl = L / 2;
+  trainBody(ctx, L - 2.4, '#eef0f3', '#d6283a', '#8d93a0', 4);
+  // due musi a punta (il treno è reversibile)
+  for (const sgn of [1, -1]) {
+    const base = sgn * (hl - 1.2);
+    const tip = sgn * hl;
+    ctx.fillStyle = 'rgba(30,25,50,0.22)';
+    ctx.beginPath();
+    ctx.moveTo(base, 0.12);
+    ctx.quadraticCurveTo(tip, 0.18, tip, 0.34);
+    ctx.lineTo(base, 0.44);
+    ctx.fill();
+    // fiancata del muso
+    ctx.beginPath();
+    ctx.moveTo(base, -0.2);
+    ctx.quadraticCurveTo(tip - sgn * 0.2, -0.05, tip, 0.2);
+    ctx.lineTo(base, 0.32);
+    ctx.closePath();
+    fillInk(ctx, '#d6283a');
+    // muso visto dall'alto
+    ctx.beginPath();
+    ctx.moveTo(base, -0.5);
+    ctx.bezierCurveTo(base + sgn * 0.7, -0.5, tip - sgn * 0.1, -0.15, tip, 0.12);
+    ctx.bezierCurveTo(tip - sgn * 0.2, 0.1, base + sgn * 0.6, -0.12, base, -0.16);
+    ctx.closePath();
+    fillInk(ctx, '#eef0f3');
+    ctx.beginPath();
+    ctx.moveTo(base + sgn * 0.15, -0.44);
+    ctx.bezierCurveTo(base + sgn * 0.55, -0.44, base + sgn * 0.8, -0.3, base + sgn * 0.85, -0.22);
+    ctx.lineTo(base + sgn * 0.15, -0.22);
+    ctx.closePath();
+    fillInk(ctx, '#2d3440', 0.022);
+    ctx.fillStyle = '#fff4b8';
+    circle(ctx, tip - sgn * 0.12, 0.18, 0.04);
+    ctx.fill();
+  }
+}
+
 export interface Sprite {
   canvas: HTMLCanvasElement;
   /** Pixel dello sprite che corrisponde al centro del veicolo. */
@@ -294,15 +474,20 @@ export interface Sprite {
 }
 
 const BUS_COLORS = ['#f2994a', '#3fb27f', '#3d8bd9'];
-const VAN_COLORS = ['#f4f4f0', '#f3e6c4', '#dfe8f0'];
+/** Colori da utilitaria d'epoca e da "cinquino". */
+const BOXY_COLORS = ['#f4f1ea', '#d9443c', '#8fc3e6', '#e6d3a3', '#3f7a52', '#f2c14e', '#b9bcc6', '#e8763f'];
+const BUBBLE_COLORS = ['#f3e6c4', '#9fcbe8', '#e0443c', '#9fe0c8', '#f7d46a', '#f28b7a', '#f7f5ee', '#b8a7e0'];
+const FIORINO_COLORS = ['#f4f4f0', '#f4f4f0', '#dfe8f0', '#f3e6c4'];
 const TRIKE_COLORS = ['#5aa9f0', '#5fd3b0', '#e84a4a'];
 
 export function paintVehicle(ctx: Ctx, kind: VehicleKind, color: number) {
   switch (kind) {
-    case 'car':
-      return drawCar(ctx, CAR_COLORS[color % CAR_COLORS.length]);
-    case 'van':
-      return drawVan(ctx, VAN_COLORS[color % 3], CAR_COLORS[color % CAR_COLORS.length]);
+    case 'boxy':
+      return drawBoxy(ctx, BOXY_COLORS[color % BOXY_COLORS.length]);
+    case 'bubble':
+      return drawBubble(ctx, BUBBLE_COLORS[color % BUBBLE_COLORS.length]);
+    case 'fiorino':
+      return drawFiorino(ctx, FIORINO_COLORS[color % FIORINO_COLORS.length], CAR_COLORS[color % CAR_COLORS.length]);
     case 'bus':
       return drawBus(ctx, BUS_COLORS[color % 3]);
     case 'scooter':
@@ -313,6 +498,10 @@ export function paintVehicle(ctx: Ctx, kind: VehicleKind, color: number) {
       return drawBike(ctx, CAR_COLORS[color % CAR_COLORS.length]);
     case 'tram':
       return drawTram(ctx);
+    case 'regional':
+      return drawRegional(ctx);
+    case 'fast':
+      return drawFast(ctx);
   }
 }
 
@@ -322,7 +511,7 @@ export class VehicleSprites {
   constructor(private readonly scale: number) {}
 
   get(kind: VehicleKind, color: number, dir: 1 | -1): Sprite {
-    const c = kind === 'tram' ? 0 : color;
+    const c = kind === 'tram' || kind === 'regional' || kind === 'fast' ? 0 : color;
     const key = `${kind}:${c}:${dir}`;
     let sp = this.cache.get(key);
     if (!sp) {

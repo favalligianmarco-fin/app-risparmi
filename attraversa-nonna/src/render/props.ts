@@ -123,6 +123,28 @@ function paintProp(ctx: Ctx, kind: PropKind) {
       fillInk(ctx, '#e0443c');
       return;
     }
+    case 'lamp': {
+      // lampione in ghisa con la lanterna
+      groundShadow(ctx, 0.2);
+      rr(ctx, -0.12, 0.12, 0.24, 0.12, 0.03);
+      fillInk(ctx, '#3a3950');
+      rr(ctx, -0.04, -0.9, 0.08, 1.04, 0.03);
+      fillInk(ctx, '#3a3950');
+      ctx.beginPath();
+      ctx.moveTo(-0.13, -0.92);
+      ctx.lineTo(0.13, -0.92);
+      ctx.lineTo(0.09, -1.14);
+      ctx.lineTo(-0.09, -1.14);
+      ctx.closePath();
+      fillInk(ctx, '#ffe89a');
+      ctx.beginPath();
+      ctx.moveTo(-0.14, -1.14);
+      ctx.lineTo(0.14, -1.14);
+      ctx.lineTo(0, -1.24);
+      ctx.closePath();
+      fillInk(ctx, '#3a3950');
+      return;
+    }
     case 'fountain': {
       // il "nasone": fontanella in ghisa
       groundShadow(ctx, 0.3);
@@ -286,10 +308,10 @@ export class StaticSprites {
     let sp = this.cache.get(key);
     if (sp) return sp;
     const s = this.scale;
-    const canvas = makeCanvas(1.2 * s, 1.8 * s);
+    const canvas = makeCanvas(1.2 * s, 1.9 * s);
     const ctx = ctx2d(canvas);
     const ox = canvas.width / 2;
-    const oy = 1.2 * s;
+    const oy = 1.35 * s;
     ctx.translate(ox, oy);
     ctx.scale(s, s);
     ctx.lineJoin = 'round';

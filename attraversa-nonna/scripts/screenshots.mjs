@@ -61,6 +61,20 @@ for (const locale of ['it-IT', 'en-US']) {
   await page.waitForTimeout(330);
   await shot('2-ciabatta');
 
+  // il palazzo della sosta, con la freccia sul portone
+  await page.evaluate(() => {
+    const g = window.__game;
+    const sim = g.sim;
+    sim.world.ensure(600);
+    const st = sim.world.stops.find((s) => s.entry > sim.player.row) ?? sim.world.stops[0];
+    st.kind = 'pranzo';
+    g.renderer.setSim(sim);
+    sim.placePlayer(st.entry, 2);
+    sim.stormY = st.entry - 20;
+  });
+  await page.waitForTimeout(1200);
+  await shot('3-palazzo');
+
   // minigioco: salta la fila alla posta
   await page.evaluate(() => {
     const g = window.__game;
@@ -68,7 +82,7 @@ for (const locale of ['it-IT', 'en-US']) {
     sim.world.ensure(600);
     const st = sim.world.stops.find((s) => s.entry > sim.player.row) ?? sim.world.stops[0];
     st.kind = 'poste';
-    sim.placePlayer(st.entry - 1, 4);
+    sim.placePlayer(st.entry, 4);
     sim.player.invuln = 99;
     sim.input('up');
   });
@@ -78,26 +92,30 @@ for (const locale of ['it-IT', 'en-US']) {
   await page.mouse.down();
   await page.waitForFunction(() => document.querySelector('.mg') && performance.now() > 0, null, { timeout: 2000 });
   await page.waitForTimeout(2300);
-  await shot('3-posta');
+  await shot('4-posta');
   await page.mouse.up();
   await page.evaluate(() => document.querySelector('.mg')?.remove());
 
-  // tram e bici, più avanti
-  const tramRow = await page.evaluate(() => {
+  // passaggio a livello: arriva il treno ad alta velocità
+  const railRow = await page.evaluate(() => {
     const sim = window.__game.sim;
-    sim.world.ensure(700);
-    return sim.world.rows.findIndex((r, i) => i > 220 && r.kind === 'tram' && sim.world.rows[i - 1].kind === 'median');
+    sim.world.ensure(900);
+    return sim.world.rows.findIndex((r, i) => i > 300 && r.kind === 'rail' && sim.world.rows[i - 1].kind === 'median');
   });
-  await start(0.31, tramRow - 1, 3);
+  await start(0.31, railRow - 1, 3);
+  await page.evaluate(() => (window.__freeze = setInterval(() => (window.__game.sim.stormY = -1e9), 50)));
   await page.waitForFunction(
     (row) => {
       const v = window.__game.sim.rowState(row).vehicles[0];
-      return v && v.x > 2 && v.x < 6.5;
+      if (!v || v.kind !== 'fast') return false;
+      const nose = v.x + (v.dir * v.len) / 2;
+      return nose > 4 && nose < 8;
     },
-    tramRow,
-    { timeout: 40000 },
+    railRow,
+    { timeout: 120000, polling: 16 },
   );
-  await shot('4-tram');
+  await shot('5-treno');
+  await page.evaluate(() => clearInterval(window.__freeze));
 
   // il temporale che insegue
   await start(0.52, 150, 5);
@@ -106,7 +124,7 @@ for (const locale of ['it-IT', 'en-US']) {
     sim.stormY = sim.playerPos().y - 2.6;
   });
   await page.waitForTimeout(900);
-  await shot('5-temporale');
+  await shot('6-temporale');
 
   // le nonne d'Italia
   await page.evaluate(() => window.__game.toMenu());
@@ -115,7 +133,7 @@ for (const locale of ['it-IT', 'en-US']) {
   await page.waitForTimeout(600);
   await page.click('[data-action="listen"][data-id="calabria"]');
   await page.waitForTimeout(400);
-  await shot('6-nonne');
+  await shot('7-nonne');
   await ctx.close();
 }
 await browser.close();

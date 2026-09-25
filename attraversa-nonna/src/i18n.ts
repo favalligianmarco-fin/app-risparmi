@@ -1,4 +1,4 @@
-import type { Shop, StopKind } from './world';
+import type { StopKind } from './world';
 
 const it = {
   title: 'Attraversa,\nNonna!',
@@ -58,14 +58,12 @@ const it = {
     ago: 'MERCERIA',
     pranzo: 'TRATTORIA',
   } as Record<StopKind, string>,
-  shops: {
-    bakery: 'FORNO',
-    grocer: 'ALIMENTARI',
-    newsstand: 'EDICOLA',
-    florist: 'FIORAIO',
-    gelato: 'GELATERIA',
-    pharmacy: 'FARMACIA',
-  } as Record<Shop, string>,
+  stopNotes: {
+    tiramisu: 'Benvenuti',
+    poste: '',
+    ago: 'Saldi!',
+    pranzo: 'Oggi lasagne',
+  } as Record<StopKind, string>,
   mg: {
     stopKicker: 'Sosta!',
     go: 'Via!',
@@ -182,13 +180,11 @@ const en: Strings = {
     ago: 'HABERDASHERY',
     pranzo: 'TRATTORIA',
   },
-  shops: {
-    bakery: 'BAKERY',
-    grocer: 'GROCER',
-    newsstand: 'NEWSSTAND',
-    florist: 'FLORIST',
-    gelato: 'GELATO',
-    pharmacy: 'PHARMACY',
+  stopNotes: {
+    tiramisu: 'Welcome',
+    poste: '',
+    ago: 'Sale!',
+    pranzo: 'Lasagne today',
   },
   mg: {
     stopKicker: 'Stop!',

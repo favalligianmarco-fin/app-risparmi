@@ -1,10 +1,10 @@
 import type { Look } from '../nonne';
 import { SLIPPER_STOP } from '../sim';
 import type { Sim, SimEvent } from '../sim';
-import { COLS } from '../world';
+import { COLS, DOOR_COL, doorRow, isTrain } from '../world';
 import type { Stop } from '../world';
 import { Background } from './background';
-import type { StopStyle } from './background';
+import type { BuildingStyle } from './background';
 import { drawPair } from './characters';
 import type { Mood } from './characters';
 import { FONT, INK, rr } from './paint';
@@ -92,7 +92,7 @@ export class Renderer {
   reduceMotion = false;
   texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1', storm: 'Storm!' };
   voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'] };
-  styleOf: (stop: Stop) => StopStyle = () => {
+  styleOf: (stop: Stop) => BuildingStyle = () => {
     throw new Error('styleOf non impostato');
   };
 
@@ -323,24 +323,35 @@ export class Renderer {
     const rTop = Math.ceil(visTop) + 1;
     const rBot = Math.max(0, Math.floor(this.camY) - 1);
 
-    // semafori del tram
+    // semafori del tram e passaggi a livello
     for (let r = rBot; r <= rTop; r++) {
       const rs = sim.rowState(r);
-      if (rs.def.kind !== 'tram' || !rs.warn) continue;
+      const kind = rs.def.kind;
+      if ((kind !== 'tram' && kind !== 'rail') || !(rs.warn || rs.trainOn)) continue;
       const on = Math.floor(sim.time * 4) % 2 === 0;
-      ctx.fillStyle = on ? 'rgba(255,214,70,0.33)' : 'rgba(232,74,74,0.22)';
-      ctx.fillRect(0, this.Y(r + 1), this.canvas.width, s);
-      for (const x of [0.25, COLS - 0.25]) {
-        const px = this.X(x);
-        const py = this.Y(r + 0.5);
-        ctx.fillStyle = INK;
-        ctx.beginPath();
-        ctx.arc(px, py, s * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = on ? '#ffd646' : '#e84a4a';
-        ctx.beginPath();
-        ctx.arc(px, py, s * 0.14, 0, Math.PI * 2);
-        ctx.fill();
+      if (kind === 'tram') {
+        ctx.fillStyle = on ? 'rgba(255,214,70,0.33)' : 'rgba(232,74,74,0.22)';
+        ctx.fillRect(0, this.Y(r + 1), this.canvas.width, s);
+        for (const x of [0.25, COLS - 0.25]) this.lamp(this.X(x), this.Y(r + 0.5), on ? '#ffd646' : '#e84a4a');
+      } else {
+        ctx.fillStyle = on ? 'rgba(232,74,74,0.26)' : 'rgba(232,74,74,0.12)';
+        ctx.fillRect(0, this.Y(r + 1), this.canvas.width, s);
+        // sbarre abbassate e le due luci rosse che si alternano
+        for (const side of [-1, 1]) {
+          const px = side < 0 ? this.X(-0.2) : this.X(COLS + 0.2);
+          const by = this.Y(r) - 0.1 * s;
+          const len = 2.4 * s;
+          const x0 = side < 0 ? px : px - len;
+          for (let k = 0; k < 6; k++) {
+            ctx.fillStyle = k % 2 ? '#ffffff' : '#e0443c';
+            ctx.fillRect(x0 + (k * len) / 6, by - 0.05 * s, len / 6 + 1, 0.1 * s);
+          }
+          ctx.strokeStyle = INK;
+          ctx.lineWidth = 0.025 * s;
+          ctx.strokeRect(x0, by - 0.05 * s, len, 0.1 * s);
+          this.lamp(px + side * -0.05 * s, this.Y(r + 0.72), on ? '#ff4a3d' : '#5a2320', 0.13);
+          this.lamp(px + side * -0.05 * s, this.Y(r + 0.36), on ? '#5a2320' : '#ff4a3d', 0.13);
+        }
       }
     }
 
@@ -384,7 +395,7 @@ export class Renderer {
         if (x < -4 * s || x > this.canvas.width + 4 * s) continue;
         const sp = this.vehicles.get(v.kind, v.color, v.dir);
         ctx.drawImage(sp.canvas, Math.round(x - sp.ox), Math.round(cy - sp.oy));
-        if (v.braking && v.kind !== 'bike' && v.kind !== 'tram') {
+        if (v.braking && v.kind !== 'bike' && !isTrain(v.kind)) {
           const bx = x - v.dir * (v.len / 2 - 0.05) * s;
           const by = cy + 0.08 * s;
           ctx.fillStyle = 'rgba(255,60,50,0.35)';
@@ -407,6 +418,7 @@ export class Renderer {
       this.withWorld(g.x, g.y, g.flip ? -1 : 1, () => drawPigeon(ctx, g.t, true));
     }
 
+    this.drawDoorArrow(sim);
     this.drawParticles();
     this.drawStorm(sim);
 
@@ -423,6 +435,46 @@ export class Renderer {
       ctx.fillStyle = `rgba(255,255,255,${(this.flash / 0.35) * 0.35})`;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
+  }
+
+  private lamp(x: number, y: number, color: string, r = 0.2) {
+    const ctx = this.ctx;
+    const s = this.s;
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(x, y, s * r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, s * r * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** Quando la coppia arriva in piazza, una freccia indica il portone da cui entrare. */
+  private drawDoorArrow(sim: Sim) {
+    if (sim.status !== 'playing') return;
+    const row = sim.player.row;
+    const stop = sim.world.stops.find((st) => row >= st.entry - 3 && row <= st.entry);
+    if (!stop) return;
+    const ctx = this.ctx;
+    const s = this.s;
+    const bob = Math.abs(Math.sin(this.time * 5)) * 0.18;
+    const x = this.X(DOOR_COL + 0.5);
+    const y = this.Y(doorRow(stop) + 1.95 + bob);
+    ctx.fillStyle = '#f7c948';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 0.05 * s;
+    ctx.beginPath();
+    ctx.moveTo(x - 0.16 * s, y - 0.3 * s);
+    ctx.lineTo(x + 0.16 * s, y - 0.3 * s);
+    ctx.lineTo(x + 0.16 * s, y - 0.05 * s);
+    ctx.lineTo(x + 0.34 * s, y - 0.05 * s);
+    ctx.lineTo(x, y + 0.3 * s);
+    ctx.lineTo(x - 0.34 * s, y - 0.05 * s);
+    ctx.lineTo(x - 0.16 * s, y - 0.05 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   /** Il temporale che insegue la nonna: nuvoloni, pioggia e tutto più scuro sotto. */
@@ -502,7 +554,7 @@ export class Renderer {
     if (this.enterT >= 0 && this.enterStop && sim.status === 'stop') {
       // la coppia va verso la porta del palazzo e sparisce dentro
       const k = Math.min(1, this.enterT / 0.7);
-      const door = { x: 2.35, y: this.enterStop.entry + 1.05 };
+      const door = { x: DOOR_COL + 0.5, y: doorRow(this.enterStop) + 0.9 };
       x += (door.x - x) * k;
       y += (door.y - y) * k;
       alpha = 1 - Math.max(0, (this.enterT - 0.5) / 0.3);

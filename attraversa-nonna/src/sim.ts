@@ -1,5 +1,5 @@
 import { Rng } from './rng';
-import { COLS, STOP_ROWS, VEHICLE_LENGTH, World, isHazard } from './world';
+import { COLS, VEHICLE_LENGTH, World, doorRow, exitRow, isHazard, isTrain } from './world';
 import type { PickupKind, RowDef, Stop, VehicleKind } from './world';
 
 /**
@@ -47,6 +47,8 @@ export interface Vehicle {
   len: number;
   dir: 1 | -1;
   speed: number;
+  /** Velocità di crociera di questo mezzo. */
+  cruise: number;
   /** Fermo per la ciabatta della nonna. */
   stopT: number;
   /** Fermo dopo una frenata d'emergenza. */
@@ -62,8 +64,10 @@ export interface RowState {
   vehicles: Vehicle[];
   live: boolean;
   nextGap: number;
-  tramT: number;
-  tramOn: boolean;
+  /** Tram e treni: secondi al prossimo passaggio, e se ne sta passando uno. */
+  trainT: number;
+  trainOn: boolean;
+  nextTrain: VehicleKind;
   warn: boolean;
   blocked: boolean[];
   puddle: boolean[];
@@ -118,8 +122,8 @@ export type SimEvent =
   | { type: 'noSlipper' }
   | { type: 'honk'; x: number; y: number }
   | { type: 'screech'; x: number; y: number }
-  | { type: 'tramWarn'; row: number }
-  | { type: 'tramPass'; row: number }
+  | { type: 'tramWarn'; row: number; train: VehicleKind }
+  | { type: 'tramPass'; row: number; train: VehicleKind }
   | { type: 'splash'; x: number; y: number }
   | { type: 'pigeons'; x: number; y: number }
   | { type: 'respawn' }
@@ -224,8 +228,9 @@ export class Sim {
         vehicles: [],
         live: false,
         nextGap: 0,
-        tramT: 0,
-        tramOn: false,
+        trainT: 0,
+        trainOn: false,
+        nextTrain: 'tram',
         warn: false,
         blocked,
         puddle,
@@ -257,7 +262,7 @@ export class Sim {
       rs.live = false;
       rs.vehicles.length = 0;
       rs.warn = false;
-      rs.tramOn = false;
+      rs.trainOn = false;
     }
     for (let i = lo; i <= hi; i++) {
       const rs = this.rowState(i);
@@ -288,6 +293,8 @@ export class Sim {
   }
 
   private makeVehicle(row: number, def: RowDef, kind: VehicleKind, center: number): Vehicle {
+    // l'alta velocità va quasi il doppio del regionale
+    const cruise = kind === 'fast' ? def.speed * 1.75 : def.speed;
     return {
       id: this.nextId++,
       row,
@@ -295,7 +302,8 @@ export class Sim {
       x: center * def.dir,
       len: VEHICLE_LENGTH[kind],
       dir: def.dir,
-      speed: def.speed,
+      speed: cruise,
+      cruise,
       stopT: 0,
       hitStopT: 0,
       color: this.rng.int(0, 7),
@@ -312,9 +320,10 @@ export class Sim {
   private fillRow(rs: RowState, row: number) {
     const def = rs.def;
     rs.vehicles.length = 0;
-    if (def.kind === 'tram') {
-      rs.tramT = this.rng.range(2.8, def.tramEvery[1]);
-      rs.tramOn = false;
+    if (def.kind === 'tram' || def.kind === 'rail') {
+      rs.trainT = this.rng.range(2.8, def.trainEvery[1]);
+      rs.trainOn = false;
+      rs.nextTrain = this.rng.pick(def.mix);
       rs.warn = false;
       return;
     }
@@ -337,17 +346,21 @@ export class Sim {
     const dir = def.dir;
     const list = rs.vehicles;
 
-    if (def.kind === 'tram' && !rs.tramOn) {
-      rs.tramT -= h;
-      if (!rs.warn && rs.tramT <= TRAM_WARN) {
+    const trainRow = def.kind === 'tram' || def.kind === 'rail';
+    if (trainRow && !rs.trainOn) {
+      rs.trainT -= h;
+      // il treno veloce si annuncia con più anticipo
+      const warnAt = rs.nextTrain === 'fast' ? TRAM_WARN + 0.5 : rs.nextTrain === 'regional' ? TRAM_WARN + 0.2 : TRAM_WARN;
+      if (!rs.warn && rs.trainT <= warnAt) {
         rs.warn = true;
-        this.events.push({ type: 'tramWarn', row });
+        this.events.push({ type: 'tramWarn', row, train: rs.nextTrain });
       }
-      if (rs.tramT <= 0) {
-        const center = this.entryPos(dir) - VEHICLE_LENGTH.tram / 2;
-        list.push(this.makeVehicle(row, def, 'tram', center));
-        rs.tramOn = true;
-        this.events.push({ type: 'tramPass', row });
+      if (rs.trainT <= 0) {
+        const kind = rs.nextTrain;
+        const center = this.entryPos(dir) - VEHICLE_LENGTH[kind] / 2;
+        list.push(this.makeVehicle(row, def, kind, center));
+        rs.trainOn = true;
+        this.events.push({ type: 'tramPass', row, train: kind });
       }
     }
 
@@ -355,7 +368,7 @@ export class Sim {
       const v = list[i];
       if (v.stopT > 0) v.stopT -= h;
       if (v.hitStopT > 0) v.hitStopT -= h;
-      let desired = v.stopT > 0 || v.hitStopT > 0 ? 0 : def.speed;
+      let desired = v.stopT > 0 || v.hitStopT > 0 ? 0 : v.cruise;
       if (i > 0) {
         const leader = list[i - 1];
         const gap = leader.x * dir - leader.len / 2 - (v.x * dir + v.len / 2);
@@ -375,11 +388,12 @@ export class Sim {
     const exit = this.exitPos(dir);
     while (list.length && list[0].x * dir - list[0].len / 2 > exit) list.shift();
 
-    if (def.kind === 'tram') {
-      if (rs.tramOn && list.length === 0) {
-        rs.tramOn = false;
+    if (trainRow) {
+      if (rs.trainOn && list.length === 0) {
+        rs.trainOn = false;
+        rs.nextTrain = this.rng.pick(def.mix);
         rs.warn = false;
-        rs.tramT = this.rng.range(def.tramEvery[0], def.tramEvery[1]);
+        rs.trainT = this.rng.range(def.trainEvery[0], def.trainEvery[1]);
       }
       return;
     }
@@ -426,7 +440,7 @@ export class Sim {
     return this.status === 'playing' && this.player.stunned <= 0 && this.player.slippers > 0;
   }
 
-  /** La nonna alza la ciabatta: chi la vede inchioda. Il tram no. */
+  /** La nonna alza la ciabatta: chi la vede inchioda. Tram e treni no. */
   useSlipper(): boolean {
     const p = this.player;
     if (this.status !== 'playing' || p.stunned > 0) return false;
@@ -439,7 +453,7 @@ export class Sim {
     this.started = true;
     for (let r = Math.max(0, p.row - 1); r <= p.row + 4; r++) {
       for (const v of this.rowState(r).vehicles) {
-        if (v.kind === 'tram') continue;
+        if (isTrain(v.kind)) continue;
         v.stopT = SLIPPER_STOP;
         v.honkT = this.rng.chance(0.35) ? this.rng.range(0.5, 1.8) : 0;
       }
@@ -510,7 +524,7 @@ export class Sim {
       this.events.push({ type: 'pickup', kind: pk.kind, x: pk.col + 0.5, y: p.row + 0.5 });
     });
     const stop = def.stop;
-    if (stop && p.row === stop.entry && !this.doneStops.has(stop.entry)) {
+    if (stop && p.row === doorRow(stop) && !this.doneStops.has(stop.entry)) {
       this.doneStops.add(stop.entry);
       this.status = 'stop';
       this.currentStop = stop;
@@ -543,7 +557,7 @@ export class Sim {
       }
     }
     // la coppia esce dalla piazza, in cima, e il temporale riparte da lontano
-    const exit = stop.entry + STOP_ROWS - 1;
+    const exit = exitRow(stop);
     p.col = p.fromCol = p.safeCol = 4;
     p.row = p.fromRow = p.safeRow = exit;
     p.t = 1;
@@ -567,8 +581,8 @@ export class Sim {
     p.queued = null;
     const rs = this.rowState(v.row);
     const y = this.logicalRow() + 0.5;
-    if (v.kind === 'tram') {
-      // il tram non frena: lo scout tira indietro la nonna appena in tempo
+    if (isTrain(v.kind)) {
+      // tram e treni non frenano: lo scout tira indietro la nonna appena in tempo
       p.col = p.fromCol = p.safeCol;
       p.row = p.fromRow = p.safeRow;
       p.t = 1;

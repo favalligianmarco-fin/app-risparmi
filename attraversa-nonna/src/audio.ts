@@ -16,6 +16,7 @@ export type Sfx =
   | 'screech'
   | 'hit'
   | 'tram'
+  | 'horn'
   | 'splash'
   | 'pigeons'
   | 'thunder'
@@ -257,6 +258,17 @@ export class GameAudio {
           }
         }
         break;
+      case 'horn': {
+        // tromba del treno: due note un po' stonate
+        for (const [f, dt] of [
+          [NOTE.A4, 0],
+          [NOTE.F4, 0.32],
+        ] as const) {
+          this.tone('sawtooth', f, f, t + dt, 0.3, 0.05);
+          this.tone('square', f * 1.5, f * 1.5, t + dt, 0.3, 0.025);
+        }
+        break;
+      }
       case 'splash':
         this.noiseBurst(t, 0.3, 0.25, 'lowpass', 2000, 300);
         break;

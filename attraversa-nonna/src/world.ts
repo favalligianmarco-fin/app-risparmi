@@ -9,39 +9,61 @@ import { Rng } from './rng';
 /** Larghezza giocabile, in celle. */
 export const COLS = 9;
 
-export type RowKind = 'sidewalk' | 'road' | 'median' | 'bike' | 'tram' | 'plaza';
-export type VehicleKind = 'car' | 'van' | 'bus' | 'scooter' | 'trike' | 'bike' | 'tram';
-export type PropKind = 'bench' | 'pot' | 'bollard' | 'bin' | 'tree' | 'hydrant' | 'fountain';
+export type RowKind = 'sidewalk' | 'road' | 'median' | 'bike' | 'tram' | 'rail' | 'plaza';
+/**
+ * I mezzi, in versione "all'italiana" ma senza marchi: l'utilitaria squadrata, la
+ * piccola tondeggiante col tettuccio di tela, il furgoncino col cassone alto, il
+ * pullman, lo scooter, il motocarro, la bici, il tram e i treni (regionale e alta velocità).
+ */
+export type VehicleKind =
+  | 'boxy'
+  | 'bubble'
+  | 'fiorino'
+  | 'bus'
+  | 'scooter'
+  | 'trike'
+  | 'bike'
+  | 'tram'
+  | 'regional'
+  | 'fast';
+export type PropKind = 'bench' | 'pot' | 'bollard' | 'bin' | 'tree' | 'hydrant' | 'fountain' | 'lamp';
 export type PickupKind = 'candy' | 'coffee' | 'slipper' | 'heart';
 export type StopKind = 'tiramisu' | 'poste' | 'ago' | 'pranzo';
 
 export const STOP_KINDS: StopKind[] = ['tiramisu', 'poste', 'ago', 'pranzo'];
-/** Negozi decorativi sul lato destro delle piazze. */
-export const SHOPS = ['bakery', 'grocer', 'newsstand', 'florist', 'gelato', 'pharmacy'] as const;
-export type Shop = (typeof SHOPS)[number];
-
 export const VEHICLE_LENGTH: Record<VehicleKind, number> = {
-  car: 1.5,
-  van: 2.05,
+  boxy: 1.45,
+  bubble: 1.2,
+  fiorino: 1.75,
   bus: 3.3,
   scooter: 0.95,
   trike: 1.15,
   bike: 0.85,
   tram: 7.2,
+  regional: 9.6,
+  fast: 12.6,
 };
 
-/** Righe di una sosta: ingresso, tre file con i palazzi ai lati, uscita in cima. */
-export const STOP_ROWS = 4;
-/** Colonne occupate dai due palazzi della piazza. */
-export const STOP_LEFT = [0, 1, 2];
-export const STOP_RIGHT = [6, 7, 8];
+/** Tram e treni non frenano per nessuno (e nemmeno per la ciabatta). */
+export const isTrain = (k: VehicleKind) => k === 'tram' || k === 'regional' || k === 'fast';
+
+/**
+ * Una sosta: la piazza davanti, un palazzo largo quanto la strada con il portone
+ * al centro, e l'uscita dietro. Entrare dal portone avvia il minigioco.
+ * Righe: 0 piazza, 1 facciata col portone, 2-4 dentro il palazzo, 5 uscita.
+ */
+export const STOP_ROWS = 6;
+export const DOOR_COL = 4;
 
 export interface Stop {
   kind: StopKind;
-  shop: Shop;
-  /** Riga d'ingresso: arrivarci fa partire il minigioco. */
+  /** Prima riga della piazza. */
   entry: number;
 }
+
+/** Riga della facciata: la cella del portone è l'unica libera. */
+export const doorRow = (s: Stop) => s.entry + 1;
+export const exitRow = (s: Stop) => s.entry + STOP_ROWS - 1;
 
 export interface RowDef {
   kind: RowKind;
@@ -53,7 +75,8 @@ export interface RowDef {
   /** Spazio libero tra due veicoli consecutivi, in celle. */
   gapMin: number;
   gapMax: number;
-  tramEvery: [number, number];
+  /** Tram e treni: secondi tra un passaggio e il successivo. */
+  trainEvery: [number, number];
   laneIndex: number;
   laneCount: number;
   busLane: boolean;
@@ -64,7 +87,7 @@ export interface RowDef {
   stop: Stop | null;
 }
 
-export const isHazard = (k: RowKind) => k === 'road' || k === 'bike' || k === 'tram';
+export const isHazard = (k: RowKind) => k === 'road' || k === 'bike' || k === 'tram' || k === 'rail';
 export const isSafe = (k: RowKind) => !isHazard(k);
 
 function baseRow(kind: RowKind): RowDef {
@@ -75,7 +98,7 @@ function baseRow(kind: RowKind): RowDef {
     mix: [],
     gapMin: 0,
     gapMax: 0,
-    tramEvery: [0, 0],
+    trainEvery: [0, 0],
     laneIndex: 0,
     laneCount: 1,
     busLane: false,
@@ -88,14 +111,22 @@ function baseRow(kind: RowKind): RowDef {
 }
 
 /**
- * Difficoltà in funzione dei metri: sale in fretta all'inizio e poi più piano.
- * 1 alla partenza, ~12 a 250 m, ~23 a 500 m, 45 (il massimo) verso i 950 m.
+ * Difficoltà in funzione dei metri: governa quante corsie, quanto fitto il traffico
+ * e quali novità compaiono. 1 alla partenza, ~12 a 250 m, 45 (il massimo) verso i 950 m.
  */
 export function difficultyAt(meters: number): number {
   return Math.min(45, 1 + meters / 21.5);
 }
 
-type Group = 'road' | 'bike' | 'tram';
+/**
+ * Quanto vanno veloci i mezzi rispetto alla partenza: cresce sempre coi metri,
+ * ×1.6 a 250 m, ×2.25 a 500 m, ×3.5 a 1000 m, fino a ×4.2.
+ */
+export function speedFactor(meters: number): number {
+  return Math.min(4.2, 1 + meters / 400);
+}
+
+type Group = 'road' | 'bike' | 'tram' | 'rail';
 
 export class World {
   readonly rows: RowDef[] = [];
@@ -147,6 +178,7 @@ export class World {
     const options: Group[] = ['road', 'road', 'road'];
     if (d >= 4) options.push('bike');
     if (d >= 6 && this.lastGroup !== 'tram') options.push('tram', 'tram');
+    if (d >= 9 && this.lastGroup !== 'rail') options.push('rail', 'rail');
     // una corsia "attaccata" alla precedente è quasi sempre una pista ciclabile o un binario
     if (joined && d >= 6) options.push('bike', 'tram');
     let g = this.rng.pick(options);
@@ -159,10 +191,17 @@ export class World {
     const kind = this.pickGroup(d, joined);
     this.lastGroup = kind;
     // la prima strada, davanti a casa, è una via tranquilla
-    const quiet = this.rows.length < 4;
-    const carBase = quiet ? 1.05 : 1.3 + d * 0.055;
+    const meters = this.rows.length;
+    const quiet = meters < 4;
+    const carBase = quiet ? 1.05 : 1.25 * speedFactor(meters);
     const gapMin = quiet ? 4.2 : Math.max(1.75, 3.4 - d * 0.04);
     const gapSpread = Math.max(1.6, 4.2 - d * 0.05);
+    // più il mezzo è veloce, più spazio serve per passargli davanti: si tiene
+    // un minimo di "tempo libero" tra un veicolo e l'altro
+    const timeGap = (r: RowDef) => {
+      r.gapMin = Math.max(r.gapMin, r.speed * 0.5 + 0.7);
+      r.gapMax = Math.max(r.gapMax, r.gapMin + 1.6);
+    };
 
     if (kind === 'road') {
       let lanes: number;
@@ -183,20 +222,21 @@ export class World {
         r.gapMax = r.gapMin + gapSpread + rng.range(0, 1.2);
         const roll = rng.next();
         if (d >= 3 && roll < 0.22) {
-          r.mix = ['scooter', 'scooter', 'scooter', 'car'];
+          r.mix = ['scooter', 'scooter', 'scooter', 'bubble'];
           r.speed = carBase * rng.range(1.25, 1.45);
         } else if (d >= 5 && roll < 0.36 && (i === 0 || i === lanes - 1)) {
-          r.mix = ['bus', 'bus', 'van'];
+          r.mix = ['bus', 'bus', 'fiorino'];
           r.speed = carBase * rng.range(0.7, 0.85);
           r.busLane = true;
           r.gapMin += 0.6;
         } else if (roll < 0.5) {
-          r.mix = ['car', 'car', 'car', 'van', 'trike'];
+          r.mix = ['bubble', 'boxy', 'bubble', 'fiorino', 'trike'];
           r.speed = carBase * rng.range(0.75, 0.95);
         } else {
-          r.mix = ['car', 'car', 'car', 'car', 'van'];
+          r.mix = ['boxy', 'boxy', 'bubble', 'fiorino', 'boxy'];
           r.speed = carBase * rng.range(0.9, 1.15);
         }
+        timeGap(r);
         this.pushHazard(r, d);
       }
     } else if (kind === 'bike') {
@@ -211,6 +251,23 @@ export class World {
         r.speed = (carBase + 0.3) * rng.range(1.0, 1.2);
         r.gapMin = gapMin * 0.9 + rng.range(0, 0.5);
         r.gapMax = r.gapMin + gapSpread + rng.range(0.5, 1.5);
+        timeGap(r);
+        this.pushHazard(r, d);
+      }
+    } else if (kind === 'rail') {
+      // ferrovia: regionali lenti e treni ad alta velocità, con passaggio a livello
+      const tracks = d >= 18 && rng.chance(0.45) ? 2 : 1;
+      const firstDir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
+      const fastShare = Math.min(0.6, 0.25 + (d - 9) * 0.01);
+      for (let i = 0; i < tracks; i++) {
+        const r = baseRow('rail');
+        r.dir = i === 0 ? firstDir : (-firstDir as 1 | -1);
+        r.laneIndex = i;
+        r.laneCount = tracks;
+        r.mix = rng.chance(fastShare) ? ['fast', 'fast', 'regional'] : ['regional', 'regional', 'fast'];
+        r.speed = Math.min(12, 8 + meters / 250);
+        const lo = Math.max(3.6, 7.5 - d * 0.07);
+        r.trainEvery = [lo, lo + 4];
         this.pushHazard(r, d);
       }
     } else {
@@ -222,9 +279,9 @@ export class World {
         r.laneIndex = i;
         r.laneCount = lanes;
         r.mix = ['tram'];
-        r.speed = 7 + Math.min(d, 30) * 0.05;
+        r.speed = Math.min(11, 6.5 + meters / 300);
         const lo = Math.max(3.2, 6 - d * 0.08);
-        r.tramEvery = [lo, lo + 3.5];
+        r.trainEvery = [lo, lo + 3.5];
         this.pushHazard(r, d);
       }
     }
@@ -259,15 +316,19 @@ export class World {
 
   private appendStop() {
     if (this.stopQueue.length === 0) this.stopQueue = this.rng.shuffle([...STOP_KINDS]);
-    const stop: Stop = { kind: this.stopQueue.pop()!, shop: this.rng.pick(SHOPS), entry: this.rows.length };
+    const stop: Stop = { kind: this.stopQueue.pop()!, entry: this.rows.length };
     this.stops.push(stop);
     for (let i = 0; i < STOP_ROWS; i++) {
       const r = baseRow('plaza');
       r.stop = stop;
-      if (i > 0) {
-        for (const c of [...STOP_LEFT, ...STOP_RIGHT]) r.blockers.push({ col: c, kind: 'bollard' });
-      }
-      if (i === 0 && this.rng.chance(0.8)) r.pigeons.push(this.rng.pick([3, 5]));
+      if (i === 0) {
+        // la piazza davanti al palazzo: due lampioni ai lati e qualche piccione
+        r.blockers.push({ col: 0, kind: 'lamp' }, { col: COLS - 1, kind: 'lamp' });
+        if (this.rng.chance(0.8)) r.pigeons.push(this.rng.pick([2, 6]));
+      } else if (i < STOP_ROWS - 1) {
+        // il palazzo: si entra solo dal portone
+        for (let c = 0; c < COLS; c++) if (i > 1 || c !== DOOR_COL) r.blockers.push({ col: c, kind: 'bollard' });
+      } else if (this.rng.chance(0.6)) r.pigeons.push(this.rng.pick([1, 7]));
       this.pushSafe(r);
     }
     this.lastGroup = null;
@@ -304,7 +365,8 @@ export class World {
         if (!ok) trapped = start;
       }
       if (trapped < 0) return;
-      if (upper.stop) return; // la piazza ha sempre il passaggio centrale libero
+      // dentro il palazzo si passa solo dal portone; i lampioni della piazza invece si tolgono
+      if (upper.stop && upper.blockers.some((b) => b.kind !== 'lamp')) return;
       upper.blockers = upper.blockers.filter((b) => b.col !== trapped);
     }
   }

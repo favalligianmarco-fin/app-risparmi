@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HIT_HALF_WIDTH, MAX_HEARTS, Sim } from '../src/sim';
 import type { SimEvent } from '../src/sim';
-import { STOP_ROWS, isHazard } from '../src/world';
+import { DOOR_COL, exitRow, isHazard } from '../src/world';
 import { runBot } from './bot';
 
 const run = (sim: Sim, seconds: number, onEvent?: (e: SimEvent) => void) => {
@@ -20,6 +20,24 @@ describe('bot', () => {
   });
 });
 
+describe('oltre i 1000 metri', () => {
+  it.each([7, 77])('seme %i: anche con i mezzi velocissimi si riesce ad andare avanti', (seed) => {
+    const sim = new Sim(seed);
+    sim.world.ensure(1400);
+    const start = sim.world.rows.findIndex((r, i) => i > 1150 && r.kind === 'median');
+    sim.placePlayer(start, 4);
+    sim.started = true;
+    // senza temporale: si misura solo se la strada è attraversabile
+    const origUpdate = sim.update.bind(sim);
+    sim.update = (dt: number) => {
+      sim.stormY = -1e9;
+      origUpdate(dt);
+    };
+    const res = runBot(sim, start + 80, 800);
+    expect(res.meters).toBeGreaterThanOrEqual(start + 80);
+  });
+});
+
 describe('tram', () => {
   it('arriva davvero, dopo il segnale di avviso', () => {
     const sim = new Sim(3);
@@ -33,6 +51,26 @@ describe('tram', () => {
     });
     expect(seen.length).toBeGreaterThanOrEqual(4);
     for (let i = 0; i + 1 < seen.length; i += 2) expect(seen.slice(i, i + 2)).toEqual(['tramWarn', 'tramPass']);
+  });
+});
+
+describe('treni', () => {
+  it('sul binario passano regionali e alta velocità, e l\'alta velocità va più forte', () => {
+    const sim = new Sim(8);
+    sim.world.ensure(1500);
+    const rails = sim.world.rows.map((r, i) => (r.kind === 'rail' ? i : -1)).filter((i) => i >= 0);
+    const speeds: Record<string, number> = {};
+    for (const row of rails.slice(0, 6)) {
+      sim.placePlayer(row - 1, 4);
+      run(sim, 30, (e) => {
+        if (e.type === 'tramPass' && e.row === row) {
+          const v = sim.rowState(row).vehicles[0];
+          speeds[v.kind] = v.cruise;
+        }
+      });
+    }
+    expect(speeds.regional).toBeGreaterThan(7);
+    expect(speeds.fast).toBeGreaterThan(speeds.regional * 1.5);
   });
 });
 
@@ -103,11 +141,18 @@ describe('temporale', () => {
 });
 
 describe('soste', () => {
-  it('arrivare in piazza avvia il minigioco; finito bene si riparte da cima', () => {
+  it('si entra dal portone; finito bene si esce dietro il palazzo', () => {
     const sim = new Sim(21);
     sim.world.ensure(300);
     const stop = sim.world.stops[0];
-    sim.placePlayer(stop.entry - 1, 4);
+    // in piazza ma di lato: il muro non si attraversa
+    sim.placePlayer(stop.entry, 2);
+    sim.input('up');
+    run(sim, 0.4);
+    expect(sim.status).toBe('playing');
+    expect(sim.player.row).toBe(stop.entry);
+    // davanti al portone sì
+    sim.placePlayer(stop.entry, DOOR_COL);
     sim.player.invuln = 99;
     sim.input('up');
     const events: SimEvent[] = [];
@@ -120,15 +165,15 @@ describe('soste', () => {
     expect(sim.status).toBe('playing');
     expect(sim.candies).toBe(before + 7);
     expect(sim.player.hearts).toBe(3);
-    expect(sim.player.row).toBe(stop.entry + STOP_ROWS - 1);
-    expect(sim.meters).toBe(stop.entry + STOP_ROWS - 1);
+    expect(sim.player.row).toBe(exitRow(stop));
+    expect(sim.meters).toBe(exitRow(stop));
   });
 
   it('un minigioco fallito costa un cuore', () => {
     const sim = new Sim(21);
     sim.world.ensure(300);
     const stop = sim.world.stops[0];
-    sim.placePlayer(stop.entry - 1, 4);
+    sim.placePlayer(stop.entry, DOOR_COL);
     sim.player.invuln = 99;
     sim.input('up');
     run(sim, 0.4);

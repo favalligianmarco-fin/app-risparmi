@@ -15,18 +15,18 @@ caratteri usati.
 
 **Descrizione** (max 4000):
 
-> La nonna deve attraversare. E poi un'altra strada. E un'altra ancora. Prendila per mano e portala più lontano che puoi, metro dopo metro, tra utilitarie, scooter, autobus, biciclette e tram.
+> La nonna deve attraversare. E poi un'altra strada. E un'altra ancora. Prendila per mano e portala più lontano che puoi, metro dopo metro, tra utilitarie d'epoca, furgoncini, motocarri, scooter, pullman, biciclette, tram e treni.
 >
 > COME SI GIOCA
 > • Tocca per fare un passo avanti, scorri per spostarti di lato.
 > • Più vai lontano, più il traffico corre e gli spazi si stringono.
 > • Alza la ciabatta della nonna: chi la vede inchioda.
-> • Il tram non si ferma per nessuno: quando il semaforo lampeggia, aspetta.
+> • Il tram e i treni non si fermano per nessuno: al passaggio a livello aspetta che passi il regionale… o il treno veloce.
 > • Da dietro arriva il temporale: non si può restare fermi troppo a lungo.
 > • Raccogli caramelle, bevi un caffè per andare più veloce, trova ciabatte di scorta.
 >
 > LE SOSTE
-> Ogni tanto la nonna ha una commissione, e tocca a te aiutarla, di corsa:
+> Ogni tanto la strada finisce davanti a un palazzo: entra dal portone e aiuta la nonna con le sue commissioni, di corsa:
 > • il tiramisù della nonna, con gli ingredienti nell'ordine giusto;
 > • la pensione alla posta, saltando la fila senza farsi vedere;
 > • l'ago da infilare, perché la nonna non ci vede più;
@@ -71,18 +71,18 @@ nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,i
 
 **Description**:
 
-> Nonna needs to cross. And then another road. And another. Take her by the hand and lead her as far as you can, meter after meter, past little cars, scooters, buses, bikes and trams.
+> Nonna needs to cross. And then another road. And another. Take her by the hand and lead her as far as you can, meter after meter, past vintage little cars, delivery vans, three-wheelers, scooters, coaches, bikes, trams and trains.
 >
 > HOW TO PLAY
 > • Tap to step forward, swipe to move sideways.
 > • The further you go, the faster the traffic and the tighter the gaps.
 > • Raise Nonna's slipper: whoever sees it slams the brakes.
-> • The tram stops for nobody: when the signal flashes, wait.
+> • Trams and trains stop for nobody: at the level crossing, wait for the regional train… or the high-speed one.
 > • A storm is coming from behind: you can't stand still for long.
 > • Collect candies, grab an espresso to walk faster, find spare slippers.
 >
 > STOPS
-> Every so often Nonna has an errand to run, and you have to help her, fast:
+> Every so often the road ends at a big palazzo: walk in through the front door and help Nonna with her errands, fast:
 > • Nonna's tiramisù, with the ingredients in the right order;
 > • her pension at the post office, skipping the queue without being seen;
 > • threading the needle, because Nonna can't see a thing;
@@ -143,9 +143,10 @@ Sezione **iPhone 6,9"**: carica in quest'ordine i file di
 
 1. `1-titolo.jpg`
 2. `2-ciabatta.jpg`
-3. `3-posta.jpg`
-4. `4-tram.jpg`
-5. `5-temporale.jpg`
-6. `6-nonne.jpg`
+3. `3-palazzo.jpg`
+4. `4-posta.jpg`
+5. `5-treno.jpg`
+6. `6-temporale.jpg`
+7. `7-nonne.jpg`
 
 Se cambi la grafica, rigenerali con `npm run screenshots`.
