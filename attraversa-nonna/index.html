@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#6ec3f0" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <title>Attraversa, Nonna!</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <div id="hud" hidden>
+        <div class="hud-top">
+          <button id="btn-pause" class="round-btn" type="button" aria-label="Pausa">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
+          </button>
+          <div class="hud-title">
+            <div id="hud-level" class="hud-level"></div>
+            <div id="hud-dest" class="hud-dest"></div>
+          </div>
+          <div class="hud-stats">
+            <div id="hud-hearts" class="hud-hearts"></div>
+            <div class="hud-row">
+              <span id="hud-candies" class="chip chip-candy"></span>
+              <span id="hud-time" class="chip chip-time"></span>
+            </div>
+          </div>
+        </div>
+        <div id="hud-coffee" class="coffee-meter" hidden><span></span></div>
+        <button id="btn-umbrella" class="umbrella-btn" type="button" aria-label="Ombrello">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M8 34 A24 24 0 0 1 56 34 Q50 29 44 34 Q38 29 32 34 Q26 29 20 34 Q14 29 8 34 Z" fill="#fff" stroke="#2d2a3e" stroke-width="3.5" stroke-linejoin="round" />
+            <path d="M32 34 V50 a5 5 0 0 1 -10 0" fill="none" stroke="#2d2a3e" stroke-width="4" stroke-linecap="round" />
+            <circle cx="32" cy="10" r="3" fill="#f7c948" stroke="#2d2a3e" stroke-width="2" />
+          </svg>
+          <span id="umbrella-count" class="badge"></span>
+        </button>
+        <div id="hint" class="hint" hidden></div>
+        <div id="banner" class="banner" hidden></div>
+      </div>
+
+      <div id="layer"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
