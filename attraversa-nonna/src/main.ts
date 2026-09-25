@@ -175,6 +175,7 @@ class Game implements Controller {
       this.renderer.render(this.sim, this.nonna.look, this.mode === 'paused' ? 0 : dt);
       perf.render = perf.render * 0.95 + (performance.now() - t0) * 0.05;
     }
+    if (this.mode === 'title' || this.mode === 'menu') this.renderer.warmUp(1);
     requestAnimationFrame((n) => this.frame(n));
   }
 

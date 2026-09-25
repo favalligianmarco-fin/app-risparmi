@@ -13,10 +13,14 @@ funziona offline, non raccoglie dati e non chiede permessi.
 
 - **Tocca** per fare un passo avanti; **scorri** a destra, a sinistra o indietro
   per spostarti. Ogni passo avanti è **un metro**: il punteggio è la distanza.
-- **Più vai lontano, più è difficile**: i mezzi vanno sempre più forte (×1,6 a
-  250 m, ×2,25 a 500 m, ×3,5 a 1000 m, fino a ×4,2), le corsie aumentano e gli
-  spazi si stringono; da ~250 m piste ciclabili e binari si incastrano con le
-  strade senza spartitraffico in mezzo.
+- **Più vai lontano, più è difficile**: i mezzi vanno sempre più forte (×1,75 a
+  250 m, ×2,5 a 500 m, ×3,9 a 1000 m, fino a ×5), le corsie aumentano (fino a
+  cinque per carreggiata) e gli spazi si stringono; da ~250 m piste ciclabili e
+  binari si incastrano con le strade senza spartitraffico in mezzo, sempre più
+  spesso man mano che si va avanti.
+- **Mezzi disegnati di tre quarti**, come le nonne e i palazzi: si vede la
+  fiancata intera e, sopra, cofano e tetto, così il cofano sta più basso del
+  tetto e il profilo di ogni mezzo si riconosce al volo.
 - **Mezzi all'italiana, senza marchi**: l'utilitaria squadrata anni '80, la
   piccola tondeggiante col tettuccio di tela, il furgoncino col cassone alto, il
   motocarro, lo scooter, il pullman, il tram. Da ~180 m arriva la **ferrovia**
@@ -96,7 +100,7 @@ Serve Node.js 22 o più recente.
 ```bash
 npm install
 npm run dev          # gioca nel browser (anche dal telefono, sulla stessa rete)
-npm test             # unit test + il bot deve superare i 250 m, e reggere oltre i 1150 m
+npm test             # unit test + il bot deve superare i 250 m, e reggere a 1150 e 1700 m
 npm run bot          # 12 corse del bot: metri raggiunti, soste, causa di fine
 npm run build        # build web in dist/
 npm run build:web    # un unico file HTML giocabile in dist-web/

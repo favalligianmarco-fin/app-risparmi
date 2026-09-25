@@ -10,7 +10,7 @@ import type { Mood } from './characters';
 import { FONT, INK, rr } from './paint';
 import type { Ctx } from './paint';
 import { StaticSprites, drawPigeon } from './props';
-import { VehicleSprites } from './vehicles';
+import { BRAKE_Y, VehicleSprites } from './vehicles';
 
 type PKind = 'puff' | 'star' | 'spark' | 'drop' | 'confetti' | 'feather' | 'dust' | 'ring';
 
@@ -123,6 +123,11 @@ export class Renderer {
   private camTarget(sim: Sim): number {
     const H = (this.layout.height - this.layout.hudTop) / this.cell;
     return Math.max(-1.3, sim.playerPos().y - H * 0.34);
+  }
+
+  /** Fuori dalla corsa (titolo, menu) si preparano in anticipo gli sprite dei mezzi. */
+  warmUp(budgetMs: number) {
+    this.vehicles.warm(budgetMs);
   }
 
   /** Nuova corsa (o nuovo schermo): si riparte con uno sfondo pulito. */
@@ -396,8 +401,8 @@ export class Renderer {
         const sp = this.vehicles.get(v.kind, v.color, v.dir);
         ctx.drawImage(sp.canvas, Math.round(x - sp.ox), Math.round(cy - sp.oy));
         if (v.braking && v.kind !== 'bike' && !isTrain(v.kind)) {
-          const bx = x - v.dir * (v.len / 2 - 0.05) * s;
-          const by = cy + 0.08 * s;
+          const bx = x - v.dir * (v.len / 2 - 0.06) * s;
+          const by = cy + BRAKE_Y * s;
           ctx.fillStyle = 'rgba(255,60,50,0.35)';
           ctx.beginPath();
           ctx.arc(bx, by, 0.16 * s, 0, Math.PI * 2);

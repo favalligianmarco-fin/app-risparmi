@@ -21,10 +21,14 @@ describe('bot', () => {
 });
 
 describe('oltre i 1000 metri', () => {
-  it.each([7, 77])('seme %i: anche con i mezzi velocissimi si riesce ad andare avanti', (seed) => {
+  it.each([
+    [7, 1150],
+    [77, 1150],
+    [7, 1700],
+  ])('seme %i da %i m: anche con i mezzi velocissimi si riesce ad andare avanti', (seed, from) => {
     const sim = new Sim(seed);
-    sim.world.ensure(1400);
-    const start = sim.world.rows.findIndex((r, i) => i > 1150 && r.kind === 'median');
+    sim.world.ensure(from + 250);
+    const start = sim.world.rows.findIndex((r, i) => i > from && r.kind === 'median');
     sim.placePlayer(start, 4);
     sim.started = true;
     // senza temporale: si misura solo se la strada è attraversabile

@@ -34,7 +34,7 @@ describe('strada infinita', () => {
     expect(avg(500, 600)).toBeGreaterThan(avg(100, 200) * 1.3);
     expect(avg(1100, 1300)).toBeGreaterThan(avg(500, 600) * 1.3);
     expect(speedFactor(0)).toBe(1);
-    expect(speedFactor(10000)).toBe(4.2);
+    expect(speedFactor(10000)).toBe(5);
   });
 
   it('più avanti arrivano i treni', () => {

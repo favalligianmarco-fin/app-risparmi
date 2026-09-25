@@ -120,10 +120,10 @@ export function difficultyAt(meters: number): number {
 
 /**
  * Quanto vanno veloci i mezzi rispetto alla partenza: cresce sempre coi metri,
- * ×1.6 a 250 m, ×2.25 a 500 m, ×3.5 a 1000 m, fino a ×4.2.
+ * ×1.75 a 250 m, ×2.5 a 500 m, ×3.9 a 1000 m, fino a ×5 verso i 1350 m.
  */
 export function speedFactor(meters: number): number {
-  return Math.min(4.2, 1 + meters / 400);
+  return Math.min(5, 1 + meters / 340);
 }
 
 type Group = 'road' | 'bike' | 'tram' | 'rail';
@@ -167,7 +167,7 @@ export class World {
     const d = difficultyAt(this.rows.length);
     this.appendGroup(d);
     // da ~250 m in poi le carreggiate cominciano a incastrarsi senza spartitraffico in mezzo
-    const tangle = d < 12 ? 0 : Math.min(0.55, 0.15 + (d - 12) * 0.012);
+    const tangle = d < 12 ? 0 : Math.min(0.65, 0.15 + (d - 12) * 0.013);
     if (this.rng.chance(tangle) && this.rows.length + 3 < this.nextStopAt) {
       this.appendGroup(d, true);
     }
@@ -209,7 +209,7 @@ export class World {
       else {
         const base = 2 + Math.floor((d - 1) / 8);
         lanes = Math.max(joined ? 1 : 2, Math.min(4, base + rng.int(-1, 1)));
-        if (d >= 30 && rng.chance(0.2)) lanes = 5;
+        if (d >= 28 && rng.chance(Math.min(0.35, 0.15 + (d - 28) * 0.01))) lanes = 5;
         if (joined) lanes = Math.min(lanes, 2);
       }
       const rightward = lanes === 1 ? (rng.chance(0.5) ? 1 : 0) : Math.ceil(lanes / 2);

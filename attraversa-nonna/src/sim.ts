@@ -35,7 +35,7 @@ export type OverCause = 'hits' | 'storm' | 'stop';
 
 /** Velocità del temporale (righe al secondo) in funzione dei metri già fatti. */
 export function stormSpeed(meters: number) {
-  return Math.min(0.85, 0.3 + meters / 1500);
+  return Math.min(0.9, 0.3 + meters / 1400);
 }
 
 export interface Vehicle {

@@ -57,7 +57,7 @@ function icon(size: number): HTMLCanvasElement {
   ctx.translate(900 * k, 800 * k);
   ctx.scale(-300 * k, 300 * k);
   ctx.lineJoin = 'round';
-  paintVehicle(ctx, 'car', 0);
+  paintVehicle(ctx, 'boxy', 1);
   ctx.restore();
   // la coppia, con la ciabatta alzata
   pair(ctx, 500 * k, 965 * k, 610 * k, 'slipper');
