@@ -15,8 +15,8 @@ for (const locale of ['it-IT', 'en-US']) {
   const ctx = await browser.newContext({ viewport: { width: 440, height: 956 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale });
   await ctx.addInitScript(() => {
     localStorage.setItem(
-      'attraversa-nonna-save',
-      JSON.stringify({ version: 1, unlocked: 14, stars: { 1: 3, 2: 3, 3: 3, 4: 2, 5: 3, 6: 3, 7: 1, 8: 3, 9: 2, 10: 3, 11: 3, 12: 2, 13: 1 }, candies: 128, outfit: 'sunday', owned: ['classic', 'sunday', 'sporty'], music: false, sfx: false, haptics: false }),
+      'attraversa-nonna-v2',
+      JSON.stringify({ version: 2, best: 487, candies: 146, nonna: 'campania', owned: ['campania', 'calabria', 'veneto', 'lazio', 'sicilia'], runs: 9, music: false, sfx: false, haptics: false, tutorial: true }),
     );
   });
   const page = await ctx.newPage();
@@ -24,87 +24,98 @@ for (const locale of ['it-IT', 'en-US']) {
   await page.waitForFunction(() => window.__game?.sim);
   await page.waitForTimeout(1500);
   const shot = async (name) => {
+    await page.evaluate(() => (document.getElementById('hint').hidden = true));
     await page.screenshot({ path: `${dir}/${name}.jpg`, type: 'jpeg', quality: 92 });
     console.log(`${dir}/${name}.jpg`);
   };
-  const hideBanner = () => page.evaluate(() => document.getElementById('banner').hidden = true);
+  /** Nuova corsa con un seme fisso, coppia ferma nella riga `row`. */
+  const start = (seed, row, col = 4, extra = {}) =>
+    page.evaluate(
+      ({ seed, row, col, extra }) => {
+        const g = window.__game;
+        const rnd = Math.random;
+        Math.random = () => seed;
+        g.play();
+        Math.random = rnd;
+        const sim = g.sim;
+        sim.world.ensure(row + 60);
+        let r = row;
+        while (!['median', 'sidewalk', 'plaza'].includes(sim.world.rows[r].kind)) r++;
+        sim.placePlayer(r, col);
+        Object.assign(sim.player, { invuln: 0 }, extra);
+        sim.candies = 23;
+        sim.started = true;
+        sim.stormY = r - 14;
+        g.renderer.setSim(sim);
+        return r;
+      },
+      { seed, row, col, extra },
+    );
 
   await shot('1-titolo');
 
-  // l'ombrello ferma il traffico
-  await page.evaluate(() => {
-    const g = window.__game;
-    g.startLevel(12);
-    const sim = g.sim;
-    const row = sim.rows.findIndex((r) => r.def.kind === 'median');
-    Object.assign(sim.player, { row, fromRow: row, col: 4, fromCol: 4, safeRow: row, safeCol: 4 });
-    sim.started = true;
-  });
-  await hideBanner();
-  await page.waitForTimeout(2600);
-  await page.evaluate(() => window.__game.sim.useUmbrella());
-  await page.waitForTimeout(380);
-  await shot('2-ombrello');
-
-  // il tram in arrivo
-  await page.evaluate(() => {
-    const g = window.__game;
-    g.startLevel(9);
-    const sim = g.sim;
-    const tram = sim.rows.findIndex((r) => r.def.kind === 'tram');
-    const row = tram - 1;
-    Object.assign(sim.player, { row, fromRow: row, col: 3, fromCol: 3, safeRow: row, safeCol: 3 });
-    sim.started = true;
-  });
-  await hideBanner();
-  await page.waitForFunction(() => {
-    const sim = window.__game.sim;
-    const rs = sim.rows.find((r) => r.def.kind === 'tram');
-    const v = rs.vehicles[0];
-    return v && v.x > 2.5 && v.x < 6.5;
-  }, null, { timeout: 30000 });
-  await shot('3-tram');
-
-  // bici e caramelle, più avanti
-  await page.evaluate(() => {
-    const g = window.__game;
-    g.startLevel(11);
-    const sim = g.sim;
-    const bike = sim.rows.findIndex((r) => r.def.kind === 'bike');
-    const row = bike - 1;
-    Object.assign(sim.player, { row, fromRow: row, col: 5, fromCol: 5, safeRow: row, safeCol: 5, coffeeT: 6 });
-    sim.started = true;
-  });
-  await hideBanner();
+  // la ciabatta ferma il traffico
+  await start(0.31, 40, 4, { slippers: 2 });
   await page.waitForTimeout(1800);
-  await shot('4-bici');
+  await page.evaluate(() => window.__game.sim.useSlipper());
+  await page.waitForTimeout(330);
+  await shot('2-ciabatta');
 
-  // arrivo e stelle
+  // minigioco: salta la fila alla posta
   await page.evaluate(() => {
     const g = window.__game;
-    g.startLevel(5);
     const sim = g.sim;
-    const row = sim.rows.length - 2;
-    Object.assign(sim.player, { row, fromRow: row, col: 4, fromCol: 4 });
-    sim.candies = sim.candiesTotal;
-    sim.started = true;
-    sim.elapsed = 9.4;
+    sim.world.ensure(600);
+    const st = sim.world.stops.find((s) => s.entry > sim.player.row) ?? sim.world.stops[0];
+    st.kind = 'poste';
+    sim.placePlayer(st.entry - 1, 4);
+    sim.player.invuln = 99;
+    sim.input('up');
   });
-  await hideBanner();
-  await page.waitForFunction(() => {
-    const sim = window.__game.sim;
-    const r = sim.player.row;
-    return sim.rows.slice(r, r + 2).every((rs) => rs.vehicles.every((v) => Math.abs(v.x - 4.5) > 2.2));
-  }, null, { timeout: 20000, polling: 16 });
-  await page.evaluate(() => window.__game.sim.input('up'));
-  await page.waitForTimeout(3400);
-  await shot('5-vittoria');
+  await page.waitForSelector('[data-go]');
+  await page.click('[data-go]');
+  await page.mouse.move(220, 800);
+  await page.mouse.down();
+  await page.waitForFunction(() => document.querySelector('.mg') && performance.now() > 0, null, { timeout: 2000 });
+  await page.waitForTimeout(2300);
+  await shot('3-posta');
+  await page.mouse.up();
+  await page.evaluate(() => document.querySelector('.mg')?.remove());
 
+  // tram e bici, più avanti
+  const tramRow = await page.evaluate(() => {
+    const sim = window.__game.sim;
+    sim.world.ensure(700);
+    return sim.world.rows.findIndex((r, i) => i > 220 && r.kind === 'tram' && sim.world.rows[i - 1].kind === 'median');
+  });
+  await start(0.31, tramRow - 1, 3);
+  await page.waitForFunction(
+    (row) => {
+      const v = window.__game.sim.rowState(row).vehicles[0];
+      return v && v.x > 2 && v.x < 6.5;
+    },
+    tramRow,
+    { timeout: 40000 },
+  );
+  await shot('4-tram');
+
+  // il temporale che insegue
+  await start(0.52, 150, 5);
+  await page.evaluate(() => {
+    const sim = window.__game.sim;
+    sim.stormY = sim.playerPos().y - 2.6;
+  });
+  await page.waitForTimeout(900);
+  await shot('5-temporale');
+
+  // le nonne d'Italia
   await page.evaluate(() => window.__game.toMenu());
   await page.waitForTimeout(300);
-  await page.click('[data-action="wardrobe"]');
-  await page.waitForTimeout(700);
-  await shot('6-guardaroba');
+  await page.click('[data-action="nonne"]');
+  await page.waitForTimeout(600);
+  await page.click('[data-action="listen"][data-id="calabria"]');
+  await page.waitForTimeout(400);
+  await shot('6-nonne');
   await ctx.close();
 }
 await browser.close();

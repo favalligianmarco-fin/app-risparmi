@@ -1,23 +1,25 @@
-import { COLS, isHazard } from '../src/levels';
+import { COLS, isHazard } from '../src/world';
 import { HIT_HALF_WIDTH, STEP_TIME, STEP_TIME_COFFEE, Sim } from '../src/sim';
 import type { Dir } from '../src/sim';
 
 /**
  * Un giocatore automatico "prudente": prevede dove saranno i veicoli e attraversa
- * un'intera carreggiata solo se la vede libera. Serve a dimostrare che ogni livello
- * generato è davvero superabile, e a tarare il tempo per la terza stella.
+ * un'intera carreggiata solo se la vede libera. Serve a dimostrare che la strada
+ * infinita è sempre superabile, e a tarare difficoltà e velocità del temporale.
  */
 export interface BotResult {
-  won: boolean;
+  meters: number;
   time: number;
   hits: number;
-  umbrellasUsed: number;
+  slippersUsed: number;
+  stops: number;
+  cause: string | null;
 }
 
 const SAFETY = 0.22;
 
 function rowSafe(sim: Sim, row: number, col: number, t0: number, t1: number): boolean {
-  const rs = sim.rows[row];
+  const rs = sim.rowState(row);
   if (!isHazard(rs.def.kind)) return true;
   if (rs.def.kind === 'tram' && (rs.warn || rs.vehicles.length)) return false;
   const cx = col + 0.5;
@@ -49,7 +51,7 @@ function rowSafe(sim: Sim, row: number, col: number, t0: number, t1: number): bo
 /** Quante corsie pericolose consecutive ci sono sopra `row`, fino al primo posto sicuro. */
 function runLength(sim: Sim, row: number): number {
   let k = 0;
-  while (row + k + 1 < sim.rows.length && isHazard(sim.rows[row + k + 1].def.kind)) k++;
+  while (isHazard(sim.rowState(row + k + 1).def.kind)) k++;
   return k;
 }
 
@@ -57,7 +59,7 @@ function crossingSafe(sim: Sim, row: number, col: number, delay: number): boolea
   const step = sim.player.coffeeT > delay + 1 ? STEP_TIME_COFFEE : STEP_TIME;
   const m = runLength(sim, row);
   const target = row + m + 1;
-  if (target >= sim.rows.length || sim.rows[target].blocked[col]) return false;
+  if (sim.rowState(target).blocked[col]) return false;
   for (let k = 1; k <= m; k++) {
     const tIn = delay + (k - 1) * step + step * 0.5;
     const tOut = delay + k * step + step * 0.5;
@@ -66,26 +68,27 @@ function crossingSafe(sim: Sim, row: number, col: number, delay: number): boolea
   return true;
 }
 
-function decide(sim: Sim, waited: number): Dir | 'umbrella' | null {
+function decide(sim: Sim, waited: number): Dir | 'slipper' | null {
   const p = sim.player;
   const row = p.row;
-  const here = sim.rows[row];
+  const here = sim.rowState(row);
   const step = p.coffeeT > 0 ? STEP_TIME_COFFEE : STEP_TIME;
 
   if (isHazard(here.def.kind)) {
     // già in mezzo alla strada (previsione sbagliata): avanti se si può, altrimenti fermi o indietro
-    if (rowSafe(sim, row + 1, p.col, step * 0.5, step * 1.6) && !sim.rows[row + 1].blocked[p.col]) return 'up';
+    if (rowSafe(sim, row + 1, p.col, step * 0.5, step * 1.6) && !sim.rowState(row + 1).blocked[p.col]) return 'up';
     if (rowSafe(sim, row, p.col, 0, step)) return null;
     if (row > 0 && rowSafe(sim, row - 1, p.col, step * 0.5, step * 1.6)) return 'down';
     return 'up';
   }
 
-  if (!isHazard(sim.rows[row + 1]?.def.kind ?? 'goal')) {
-    if (!sim.rows[row + 1].blocked[p.col]) return 'up';
+  const next = sim.rowState(row + 1);
+  if (!isHazard(next.def.kind)) {
+    if (!next.blocked[p.col]) return 'up';
     // cerca la colonna libera più vicina
     for (let d = 1; d < COLS; d++) {
       for (const c of [p.col - d, p.col + d]) {
-        if (c >= 0 && c < COLS && !sim.rows[row + 1].blocked[c] && !here.blocked[c]) {
+        if (c >= 0 && c < COLS && !next.blocked[c] && !here.blocked[c]) {
           return c < p.col ? 'left' : 'right';
         }
       }
@@ -93,9 +96,10 @@ function decide(sim: Sim, waited: number): Dir | 'umbrella' | null {
   }
 
   if (crossingSafe(sim, row, p.col, 0)) return 'up';
-  if (waited > 3.5 && p.umbrellas > 0 && runLength(sim, row) > 0) {
-    const firstRow = sim.rows[row + 1];
-    if (firstRow.def.kind !== 'tram') return 'umbrella';
+  // il temporale si avvicina (o si aspetta da troppo): fuori la ciabatta
+  const storm = sim.playerPos().y - sim.stormY;
+  if ((waited > 3.5 || storm < 4) && p.slippers > 0 && runLength(sim, row) > 0) {
+    if (next.def.kind !== 'tram') return 'slipper';
   }
   // spostarsi di lato se da un'altra parte si passa prima
   for (let d = 1; d <= 3; d++) {
@@ -110,16 +114,20 @@ function decide(sim: Sim, waited: number): Dir | 'umbrella' | null {
   return null;
 }
 
-export function runBot(sim: Sim, maxTime = 180): BotResult {
+export function runBot(sim: Sim, targetMeters = 300, maxTime = 600): BotResult {
   const dt = 1 / 60;
   let waited = 0;
-  let umbrellasUsed = 0;
-  while (sim.status === 'playing' && sim.time < maxTime) {
+  let slippersUsed = 0;
+  while (sim.status !== 'over' && sim.meters < targetMeters && sim.time < maxTime) {
+    if (sim.status === 'stop') {
+      sim.finishStop(true, 10);
+      continue;
+    }
     const p = sim.player;
     if (!p.moving && p.stunned <= 0 && p.slip <= 0) {
       const action = decide(sim, waited);
-      if (action === 'umbrella') {
-        if (sim.useUmbrella()) umbrellasUsed++;
+      if (action === 'slipper') {
+        if (sim.useSlipper()) slippersUsed++;
         waited = 0;
       } else if (action) {
         sim.input(action);
@@ -130,5 +138,5 @@ export function runBot(sim: Sim, maxTime = 180): BotResult {
     if (!p.moving) waited += dt;
     sim.events.length = 0;
   }
-  return { won: sim.status === 'won', time: sim.elapsed, hits: sim.player.hits, umbrellasUsed };
+  return { meters: sim.meters, time: sim.elapsed, hits: sim.player.hits, slippersUsed, stops: sim.stopsDone, cause: sim.overCause };
 }

@@ -8,20 +8,28 @@ export type Sfx =
   | 'bump'
   | 'candy'
   | 'coffee'
-  | 'umbrellaPickup'
-  | 'umbrella'
-  | 'noUmbrella'
+  | 'slipperPickup'
+  | 'heart'
+  | 'slipper'
+  | 'noSlipper'
   | 'honk'
   | 'screech'
   | 'hit'
   | 'tram'
   | 'splash'
   | 'pigeons'
-  | 'win'
-  | 'lose'
+  | 'thunder'
+  | 'stop'
+  | 'over'
   | 'click'
-  | 'star'
-  | 'buy';
+  | 'buy'
+  | 'good'
+  | 'bad'
+  | 'chomp'
+  | 'tick'
+  | 'cash'
+  | 'thread'
+  | 'caught';
 
 const NOTE: Record<string, number> = {};
 {
@@ -193,15 +201,19 @@ export class GameAudio {
       case 'coffee':
         ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.055, 0.12, 0.16));
         break;
-      case 'umbrellaPickup':
+      case 'slipperPickup':
         this.tone('sine', 300, 900, t, 0.22, 0.2);
         break;
-      case 'umbrella':
-        this.noiseBurst(t, 0.35, 0.22, 'bandpass', 700, 3200, 1.5);
-        this.tone('triangle', NOTE.A5, NOTE.A5, t + 0.12, 0.3, 0.16);
-        this.tone('triangle', NOTE.E6, NOTE.E6, t + 0.2, 0.35, 0.12);
+      case 'heart':
+        ['E5', 'G5', 'B5', 'E6'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.06, 0.18, 0.14));
         break;
-      case 'noUmbrella':
+      case 'slipper':
+        // sventolata e "ciaf!"
+        this.noiseBurst(t, 0.22, 0.25, 'bandpass', 600, 2600, 1.2);
+        this.noiseBurst(t + 0.2, 0.08, 0.45, 'highpass', 1800, 1200, 0.8);
+        this.tone('sine', 220, 90, t + 0.2, 0.12, 0.35);
+        break;
+      case 'noSlipper':
         this.tone('square', 140, 120, t, 0.18, 0.06);
         break;
       case 'honk': {
@@ -251,19 +263,44 @@ export class GameAudio {
       case 'pigeons':
         for (let i = 0; i < 7; i++) this.noiseBurst(t + i * 0.055, 0.04, 0.12, 'bandpass', 1400, 1100, 2);
         break;
-      case 'win':
-        ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => this.tone('square', NOTE[n], NOTE[n], t + i * 0.1, 0.14, 0.07));
-        ['C5', 'E5', 'G5', 'C6'].forEach((n) => this.tone('triangle', NOTE[n], NOTE[n], t + 0.42, 0.6, 0.1));
+      case 'thunder':
+        this.noiseBurst(t, 1.6, 0.5, 'lowpass', 500, 60, 0.7);
+        this.noiseBurst(t + 0.1, 0.25, 0.25, 'lowpass', 1600, 300, 0.7);
         break;
-      case 'lose':
+      case 'stop':
+        ['C5', 'E5', 'G5'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.09, 0.18, 0.14));
+        break;
+      case 'over':
         ['G4', 'F#4', 'F4', 'E4'].forEach((n, i) => this.tone('sawtooth', NOTE[n], NOTE[n] * (i === 3 ? 0.94 : 1), t + i * 0.22, i === 3 ? 0.6 : 0.2, 0.05));
+        break;
+      case 'good':
+        this.tone('triangle', NOTE.A5, NOTE.A5, t, 0.1, 0.18);
+        this.tone('triangle', NOTE.E6, NOTE.E6, t + 0.06, 0.16, 0.14);
+        break;
+      case 'bad':
+        this.tone('square', 180, 150, t, 0.22, 0.07);
+        break;
+      case 'chomp':
+        this.noiseBurst(t, 0.07, 0.25, 'lowpass', 900 + Math.random() * 400, 300, 1);
+        this.tone('sine', 160, 110, t, 0.06, 0.2);
+        break;
+      case 'tick':
+        this.tone('square', 880, 880, t, 0.06, 0.06);
+        break;
+      case 'cash':
+        ['E6', 'G6', 'C7'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.07, 0.25, 0.12));
+        this.noiseBurst(t + 0.2, 0.2, 0.08, 'highpass', 6000, 4000);
+        break;
+      case 'thread':
+        this.tone('sine', 700, 1400, t, 0.18, 0.18);
+        break;
+      case 'caught':
+        // fischio indignato
+        this.tone('sine', 1500, 2200, t, 0.14, 0.12);
+        this.tone('sine', 2200, 1300, t + 0.16, 0.2, 0.12);
         break;
       case 'click':
         this.tone('sine', 900, 600, t, 0.04, 0.12);
-        break;
-      case 'star':
-        this.tone('triangle', NOTE.C6, NOTE.C6, t, 0.25, 0.16);
-        this.tone('triangle', NOTE.G6, NOTE.G6, t + 0.05, 0.3, 0.1);
         break;
       case 'buy':
         ['G5', 'C6', 'E6'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.07, 0.2, 0.15));

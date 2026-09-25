@@ -120,26 +120,33 @@ svg {
   box-shadow: 0 1px 0 var(--ink);
 }
 
-.hud-title {
+.hud-meters {
   flex: 1;
   min-width: 0;
+  text-align: center;
   color: #fff;
-  text-shadow: 0 2px 0 var(--ink), 0 0 6px rgba(45, 42, 62, 0.6);
-  line-height: 1.1;
+  line-height: 1;
 }
 
-.hud-level {
+.meters {
   font-weight: 700;
-  font-size: 19px;
+  font-size: 34px;
   letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink);
 }
 
-.hud-dest {
-  font-weight: 500;
+.meters.beaten {
+  color: var(--sun);
+}
+
+.best {
+  margin-top: 4px;
+  font-weight: 600;
   font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 var(--ink), 0 0 6px rgba(45, 42, 62, 0.6);
 }
 
 .hud-stats {
@@ -196,14 +203,14 @@ svg {
   color: var(--leaf-dark);
 }
 
-.umbrella-btn {
+.slipper-btn {
   position: absolute;
   right: calc(var(--safe-right) + 18px);
   bottom: calc(var(--safe-bottom) + 22px);
   width: 76px;
   height: 76px;
   border-radius: 50%;
-  background: var(--tomato);
+  background: var(--sun);
   border: 4px solid var(--ink);
   box-shadow: 0 5px 0 var(--ink);
   display: grid;
@@ -211,22 +218,22 @@ svg {
   transition: filter 0.2s;
 }
 
-.umbrella-btn svg {
-  width: 48px;
-  height: 48px;
+.slipper-btn svg {
+  width: 54px;
+  height: 54px;
 }
 
-.umbrella-btn:active {
+.slipper-btn:active {
   transform: translateY(3px);
   box-shadow: 0 2px 0 var(--ink);
 }
 
-.umbrella-btn.empty {
+.slipper-btn.empty {
   filter: grayscale(1) brightness(1.15);
   opacity: 0.7;
 }
 
-.umbrella-btn.pulse {
+.slipper-btn.pulse {
   animation: pulse 1s ease-in-out infinite;
 }
 
@@ -238,7 +245,7 @@ svg {
   height: 28px;
   padding: 0 6px;
   border-radius: 14px;
-  background: var(--sun);
+  background: var(--paper);
   border: 3px solid var(--ink);
   font-weight: 700;
   font-size: 15px;
@@ -285,6 +292,11 @@ svg {
   gap: 10px;
   pointer-events: none;
   animation: bob 1.4s ease-in-out infinite;
+}
+
+.hint.warn {
+  background: #3a3f5c;
+  color: #fff;
 }
 
 .hint .finger {
@@ -568,94 +580,7 @@ svg {
   min-height: 0;
 }
 
-/* griglia dei livelli */
-.level-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.level-btn {
-  position: relative;
-  aspect-ratio: 1 / 1.08;
-  max-width: 100%;
-  border-radius: 16px;
-  background: var(--paper-2);
-  border: 3px solid var(--ink);
-  box-shadow: 0 4px 0 var(--ink);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-weight: 700;
-  font-size: 22px;
-}
-
-.level-btn.current {
-  background: var(--sun);
-}
-
-.level-btn.done {
-  background: #d8f0c9;
-}
-
-.level-btn[disabled] {
-  background: #d9d4df;
-  color: var(--muted);
-  box-shadow: 0 4px 0 #9a93a8;
-  border-color: #9a93a8;
-}
-
-.level-btn .mini-stars {
-  display: flex;
-  gap: 1px;
-}
-
-.level-btn .mini-stars svg {
-  width: 13px;
-  height: 13px;
-}
-
-.level-btn .lock svg {
-  width: 18px;
-  height: 18px;
-  fill: #9a93a8;
-}
-
 /* risultato */
-.stars {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.star-slot {
-  width: 96px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.15;
-  color: var(--muted);
-}
-
-.star-slot svg {
-  width: 62px;
-  height: 62px;
-}
-
-.star-slot.on {
-  color: var(--ink);
-}
-
-.star-slot.on svg {
-  animation: starpop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
-}
-
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -685,14 +610,90 @@ svg {
   font-variant-numeric: tabular-nums;
 }
 
-/* guardaroba */
-.outfit-grid {
+/* record e distanza */
+.record {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 10px;
+  border-radius: 20px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  font-weight: 700;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.record svg {
+  width: 24px;
+  height: 24px;
+}
+
+.distance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.distance strong {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.distance.best strong {
+  color: var(--tomato);
+}
+
+.distance span {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.distance em {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: var(--sun);
+  border: 2px solid var(--ink);
+}
+
+.distance em.muted {
+  background: var(--paper-2);
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.distance em svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* le nonne d'Italia */
+.panel.wide {
+  width: min(460px, 100%);
+}
+
+.nonna-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
-.outfit {
+.nonna {
   border-radius: 18px;
   background: var(--paper-2);
   border: 3px solid var(--ink);
@@ -700,14 +701,21 @@ svg {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
 }
 
-.outfit.worn {
+.nonna.chosen {
   background: #d8f0c9;
 }
 
-.outfit canvas {
+.nonna .portrait {
+  position: relative;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.nonna canvas {
+  display: block;
   width: 100%;
   max-width: 100%;
   aspect-ratio: 1 / 1;
@@ -715,13 +723,123 @@ svg {
   background: radial-gradient(circle at 50% 70%, #ffffff, #cfeaf8);
 }
 
-.outfit .name {
+.nonna .said {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: #fff;
+  border: 2px solid var(--ink);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--tomato-dark);
 }
 
-.outfit .btn {
+.nonna .said.pop {
+  animation: pop 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.nonna .name {
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+}
+
+.nonna .region {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.nonna .btn {
   width: 100%;
+}
+
+/* minigiochi delle soste */
+.mg {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  animation: fadein 0.25s ease-out both;
+  touch-action: none;
+}
+
+.mg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 10px) calc(var(--safe-right) + 16px) 10px calc(var(--safe-left) + 16px);
+  background: var(--ink);
+  color: #fff;
+}
+
+.mg-place {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.mg-timer {
+  flex: 1;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.mg-timer span {
+  display: block;
+  height: 100%;
+  background: var(--leaf);
+  transform-origin: left center;
+}
+
+.mg-timer span.late {
+  background: var(--tomato);
+}
+
+.mg-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: var(--safe-bottom);
+}
+
+.mg-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.mg-card {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px 18px;
+  background: rgba(45, 42, 62, 0.45);
+}
+
+.mg-kicker {
+  align-self: center;
+  padding: 3px 12px;
+  border-radius: 12px;
+  background: var(--sun);
+  border: 2px solid var(--ink);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* impostazioni */

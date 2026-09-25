@@ -25,13 +25,14 @@ le rispetta già.
 
 | Regola | Cosa dice | Come la rispetta il gioco |
 |---|---|---|
-| **1.1 Contenuti discutibili** | Niente contenuti offensivi, crudeli o "mean-spirited" verso gruppi di persone, e niente violenza realistica | La nonna è la protagonista, mai presa in giro. Nessuno viene investito: i veicoli inchiodano prima, lei agita l'ombrello e grida "Mascalzone!". Il tram, che non frena, non la tocca: lo scout la tira indietro in tempo. |
+| **1.1 Contenuti discutibili** | Niente contenuti offensivi, crudeli o "mean-spirited" verso gruppi di persone, e niente violenza realistica | Nessuno viene investito: i veicoli inchiodano prima e la nonna alza la ciabatta senza colpire nessuno. Il tram, che non frena, non la tocca: lo scout la tira indietro in tempo. |
+| **1.1.1 Gruppi e origini** | Vietati contenuti che prendono di mira gruppi per origine, religione, ecc. | Le nonne regionali sono le protagoniste e se la prendono solo con chi guida male, nel proprio dialetto. Esclusi: bestemmie, insulti ai morti, "terrone"/"polentone", riferimenti a mafie e simili (regole scritte in cima a `src/nonne.ts`). |
 | **2.1 Completezza** | Niente crash, niente segnaposto, tutti i link funzionanti | Da verificare su iPhone reale e con TestFlight prima dell'invio. |
 | **2.3 Metadati accurati** | Screenshot che mostrano il gioco vero, nessun nome o parola chiave di marchi altrui | Gli screenshot sono scene reali del gioco. Evitati nomi come "Vespa", "Ape", "Frogger" o "Crossy Road" nei testi e nelle parole chiave. |
 | **2.5.2 App autosufficienti** | Il codice non si può scaricare da internet dopo la revisione | Tutto il gioco è dentro l'app, che non si collega mai alla rete. |
-| **3.1.1 Acquisti in-app** | Livelli, valute di gioco e contenuti a pagamento solo con gli acquisti in-app di Apple | Oggi è tutto gratis; le caramelle si guadagnano solo giocando. Per vendere qualcosa in futuro serve StoreKit (vedi sezione 7). |
-| **4.2 Funzionalità minima** | Un'app non può essere solo un sito web impacchettato | È un gioco completo e offline, con vibrazione nativa, salvataggi nativi e più di 40 livelli testati. |
-| **4.3 Spam** | Non si accettano copie di giochi già diffusi | Il tema italiano (la nonna, lo scout, il tram, le commissioni), l'ombrello che ferma il traffico e il guardaroba lo distinguono dai cloni di "attraversa la strada". |
+| **3.1.1 Acquisti in-app** | Valute di gioco e contenuti a pagamento solo con gli acquisti in-app di Apple | Oggi è tutto gratis; le caramelle si guadagnano solo giocando. Per vendere nonne o caramelle in futuro serve StoreKit (vedi sezione 7). |
+| **4.2 Funzionalità minima** | Un'app non può essere solo un sito web impacchettato | È un gioco completo e offline, con vibrazione nativa, salvataggi nativi, strada infinita e quattro minigiochi. |
+| **4.3 Spam** | Non si accettano copie di giochi già diffusi | Il tema italiano (la nonna, lo scout, il tram, le commissioni), la ciabatta che ferma il traffico, le soste con i minigiochi e le nonne regionali lo distinguono dai cloni di "attraversa la strada". |
 | **5.1.1 Privacy** | Privacy policy obbligatoria nella scheda e raggiungibile dentro l'app | Dentro l'app: Impostazioni → Privacy. Il link va inserito in App Store Connect. |
 | **5.2 Proprietà intellettuale** | Solo contenuti tuoi o con licenza | Grafica e musica sono generate dal codice del gioco; il carattere Fredoka è sotto SIL Open Font License, citata in Impostazioni → Riconoscimenti. |
 
@@ -85,7 +86,11 @@ Poi, nella scheda dell'app:
 2. **Classificazione per età**: il questionario è stato rifatto (fasce 4+,
    9+, 13+, 16+, 18+) e da settembre 2026 include anche le domande sui
    **social media**. Le risposte giuste per questo gioco sono in
-   [scheda-app-store.md](scheda-app-store.md): il risultato atteso è **4+**.
+   [scheda-app-store.md](scheda-app-store.md). Le nonne dicono parolacce
+   leggere ogni volta che un'auto inchioda: per Apple è "profanity or crude
+   humor" **frequente**, quindi il risultato atteso è **13+**. Per scendere a
+   9+ basterebbe togliere le parole più crude (minchia, belìn, mona, pirla,
+   cornuto…) da `src/nonne.ts`.
 3. **Privacy dell'app**: rispondi "No, non raccogliamo dati da questa app"
    → etichetta **"Dati non raccolti"**. Inserisci l'URL della privacy policy.
 4. **Prezzi e disponibilità**: Gratis, tutti i paesi (o solo quelli che vuoi).
@@ -119,8 +124,8 @@ La stessa pagina può fare da URL di supporto, visto che contiene il contatto.
 1. In Xcode: *Product → Archive* (con destinazione "Any iOS Device (arm64)").
 2. Nell'Organizer: **Distribute App → App Store Connect → Upload**.
 3. Dopo qualche minuto la build compare in App Store Connect, nella sezione
-   **TestFlight**: installala sul tuo iPhone con l'app TestFlight e rigioca
-   qualche livello.
+   **TestFlight**: installala sul tuo iPhone con l'app TestFlight e fai
+   qualche corsa, arrivando almeno a una sosta.
 4. Nella pagina della versione scegli la build, poi **Aggiungi per la
    revisione → Invia**. La revisione di solito richiede da qualche ora a un
    paio di giorni.
@@ -143,9 +148,25 @@ in Xcode, poi `npm run ios:sync` e ripeti archiviazione e caricamento.
 | Modello | Cosa cambia |
 |---|---|
 | **App a pagamento** | Basta impostare un prezzo; diventi trader (DSA) e devi accettare il *Paid Apps Agreement* con i dati bancari e fiscali. |
-| **Acquisti in-app** (es. vestiti, "togli pubblicità") | Obbligatorio usare StoreKit (plugin Capacitor per gli acquisti). Se vendi le caramelle, sono una valuta di gioco: regola 3.1.1. |
+| **Acquisti in-app** (es. alcune nonne a pagamento, un pacchetto di caramelle) | Obbligatorio usare StoreKit (plugin Capacitor per gli acquisti). Una nonna comprata è un acquisto "non consumabile" e va ripristinabile ("Ripristina acquisti"); le caramelle sono una valuta di gioco "consumabile". Serve anche il *Paid Apps Agreement*. |
 | **Pubblicità** | Serve un SDK (es. AdMob): cambia l'etichetta privacy, quasi sempre serve la richiesta di tracciamento (App Tracking Transparency) e il consenso GDPR in UE. La classificazione per età va rivista. |
-| **Classifiche Game Center** | Nessun dato personale gestito da te; aggiunge valore "nativo" all'app. |
+| **Classifiche Game Center** | Nessun dato personale gestito da te; con i metri come punteggio è naturale, e aggiunge valore "nativo" all'app. |
+
+## 8. Il multigiocatore (idea per dopo)
+
+Più coppie nonna+scout sulla stessa strada, con lo scout che raccoglie sassolini
+e li tira con la fionda agli avversari. Tecnicamente la strada è già
+deterministica (stesso seme = stessa strada per tutti), quindi basta scambiarsi
+le posizioni. Due strade possibili:
+
+- **Game Center (GameKit)**: partite in tempo reale tra amici o sconosciuti,
+  senza server tuo e senza dati personali da gestire. Serve un plugin nativo.
+- **Server tuo**: più flessibile, ma cambia tutto sul fronte privacy (etichetta,
+  informativa) e dei costi.
+
+Per la classificazione: una fionda contro altri giocatori è "cartoon violence"
+(9+ o 13+ a seconda della frequenza), e con giocatori sconosciuti e chat
+bisogna rispondere diversamente al questionario.
 
 ## Fonti
 

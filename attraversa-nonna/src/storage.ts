@@ -1,34 +1,39 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
+import { FREE_NONNE } from './nonne';
 
 /** Progressi del giocatore. Restano solo sul dispositivo. */
 export interface Save {
-  version: 1;
-  /** Livello più alto sbloccato. */
-  unlocked: number;
-  /** Stelle migliori per livello. */
-  stars: Record<number, number>;
+  version: 2;
+  /** Record di distanza, in metri. */
+  best: number;
   candies: number;
-  outfit: string;
+  /** Nonna scelta e nonne sbloccate. */
+  nonna: string;
   owned: string[];
+  runs: number;
   music: boolean;
   sfx: boolean;
   haptics: boolean;
+  /** I suggerimenti iniziali sono già stati mostrati. */
+  tutorial: boolean;
 }
 
-const KEY = 'attraversa-nonna-save';
+// Chiave nuova: con la modalità infinita i vecchi progressi a livelli ripartono da zero.
+const KEY = 'attraversa-nonna-v2';
 
 export function defaultSave(): Save {
   return {
-    version: 1,
-    unlocked: 1,
-    stars: {},
+    version: 2,
+    best: 0,
     candies: 0,
-    outfit: 'classic',
-    owned: ['classic'],
+    nonna: 'campania',
+    owned: [...FREE_NONNE],
+    runs: 0,
     music: true,
     sfx: true,
     haptics: true,
+    tutorial: false,
   };
 }
 
@@ -36,7 +41,9 @@ function parse(raw: string | null): Save {
   if (!raw) return defaultSave();
   try {
     const data = JSON.parse(raw) as Partial<Save>;
-    return { ...defaultSave(), ...data, version: 1 };
+    const save = { ...defaultSave(), ...data, version: 2 as const };
+    for (const id of FREE_NONNE) if (!save.owned.includes(id)) save.owned.push(id);
+    return save;
   } catch {
     return defaultSave();
   }

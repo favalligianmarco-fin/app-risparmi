@@ -1,8 +1,10 @@
-import { COLS } from '../levels';
-import type { Outfit } from '../outfits';
-import { UMBRELLA_STOP } from '../sim';
+import type { Look } from '../nonne';
+import { SLIPPER_STOP } from '../sim';
 import type { Sim, SimEvent } from '../sim';
+import { COLS } from '../world';
+import type { Stop } from '../world';
 import { Background } from './background';
+import type { StopStyle } from './background';
 import { drawPair } from './characters';
 import type { Mood } from './characters';
 import { FONT, INK, rr } from './paint';
@@ -10,7 +12,7 @@ import type { Ctx } from './paint';
 import { StaticSprites, drawPigeon } from './props';
 import { VehicleSprites } from './vehicles';
 
-type PKind = 'puff' | 'star' | 'spark' | 'drop' | 'confetti' | 'feather' | 'dust';
+type PKind = 'puff' | 'star' | 'spark' | 'drop' | 'confetti' | 'feather' | 'dust' | 'ring';
 
 interface Particle {
   alive: boolean;
@@ -52,12 +54,17 @@ export interface Layout {
 
 export interface Texts {
   honk: string;
-  hit: string[];
-  umbrella: string;
   coffee: string;
-  extraUmbrella: string;
-  win: string[];
-  destination: string;
+  extraSlipper: string;
+  extraHeart: string;
+  storm: string;
+}
+
+/** Le frasi della nonna scelta. */
+export interface Voice {
+  hit: string[];
+  slipper: string[];
+  happy: string[];
 }
 
 export class Renderer {
@@ -71,44 +78,30 @@ export class Renderer {
   private xRight = COLS;
   private camY = -1.3;
   private bg: Background | null = null;
-  private bgSim: Sim | null = null;
+  private sim: Sim | null = null;
   private vehicles!: VehicleSprites;
   private statics!: StaticSprites;
   private particles: Particle[] = [];
   private floaters: Floater[] = [];
   private shake = 0;
-  private winT = -1;
+  private flash = 0;
+  /** Animazione della coppia che entra nel palazzo della sosta. */
+  private enterT = -1;
+  private enterStop: Stop | null = null;
   private time = 0;
   reduceMotion = false;
-  texts: Texts = {
-    honk: 'Beep!',
-    hit: ['Hey!'],
-    umbrella: 'STOP!',
-    coffee: 'Espresso!',
-    extraUmbrella: '+1',
-    win: ['Yay!'],
-    destination: '',
+  texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1', storm: 'Storm!' };
+  voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'] };
+  styleOf: (stop: Stop) => StopStyle = () => {
+    throw new Error('styleOf non impostato');
   };
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile');
     this.ctx = ctx;
-    for (let i = 0; i < 260; i++) {
-      this.particles.push({
-        alive: false,
-        kind: 'puff',
-        x: 0,
-        y: 0,
-        vx: 0,
-        vy: 0,
-        life: 0,
-        max: 1,
-        size: 0,
-        rot: 0,
-        vr: 0,
-        color: '#fff',
-      });
+    for (let i = 0; i < 280; i++) {
+      this.particles.push({ alive: false, kind: 'puff', x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 0, rot: 0, vr: 0, color: '#fff' });
     }
   }
 
@@ -124,44 +117,38 @@ export class Renderer {
     this.xRight = this.xLeft + visCols;
     this.vehicles = new VehicleSprites(this.s);
     this.statics = new StaticSprites(this.s);
-    if (this.bgSim) {
-      const sim = this.bgSim;
-      this.bgSim = null;
-      this.setLevel(sim, this.texts.destination);
-    }
-  }
-
-  private camRange(rows: number): [number, number] {
-    const H = this.layout.height / this.cell;
-    const hud = this.layout.hudTop / this.cell;
-    const lo = -1.3;
-    // in cima si vede anche l'insegna del negozio di destinazione
-    const hi = rows + 2.7 + hud - H;
-    return [lo, hi];
+    if (this.sim) this.setSim(this.sim, true);
   }
 
   private camTarget(sim: Sim): number {
-    const [lo, hi] = this.camRange(sim.rows.length);
-    if (hi <= lo) return (lo + hi) / 2;
     const H = (this.layout.height - this.layout.hudTop) / this.cell;
-    const target = sim.playerPos().y - H * 0.34;
-    return Math.max(lo, Math.min(hi, target));
+    return Math.max(-1.3, sim.playerPos().y - H * 0.34);
   }
 
-  setLevel(sim: Sim, destinationLabel: string) {
-    this.texts.destination = destinationLabel;
+  /** Nuova corsa (o nuovo schermo): si riparte con uno sfondo pulito. */
+  setSim(sim: Sim, keepCamera = false) {
     this.bg?.dispose();
-    const [lo, hi] = this.camRange(sim.rows.length);
-    const H = this.layout.height / this.cell;
-    const yMin = Math.min(lo, (lo + hi) / 2) - 1;
-    const yMax = Math.max(hi, (lo + hi) / 2) + H + 1;
-    this.bg = new Background(sim.level, this.s, this.xLeft, this.xRight, yMin, yMax, destinationLabel);
-    this.bgSim = sim;
-    this.camY = this.camTarget(sim);
-    this.winT = -1;
-    for (const p of this.particles) p.alive = false;
-    this.floaters = [];
-    this.shake = 0;
+    this.bg = new Background(sim.world, this.s, this.xLeft, this.xRight, (st) => this.styleOf(st));
+    this.sim = sim;
+    if (!keepCamera) {
+      this.camY = this.camTarget(sim);
+      for (const p of this.particles) p.alive = false;
+      this.floaters = [];
+      this.shake = 0;
+      this.enterT = -1;
+      this.enterStop = null;
+    }
+  }
+
+  /** La coppia entra nel palazzo della sosta (dura ~0.8 s). */
+  enter(stop: Stop) {
+    this.enterStop = stop;
+    this.enterT = 0;
+  }
+
+  leave() {
+    this.enterT = -1;
+    this.enterStop = null;
   }
 
   // ------------------------------------------------------------ effetti
@@ -188,8 +175,14 @@ export class Renderer {
     this.floaters.push({ text, x, y, t: 0, max, color, bubble, size });
   }
 
+  say(kind: keyof Voice, color = '#2d2a3e', max = 1.4) {
+    const lines = this.voice[kind];
+    const text = lines[Math.floor(Math.random() * lines.length)];
+    const p = this.sim?.playerPos() ?? { x: 4.5, y: 0 };
+    this.float(text, p.x, p.y, color, true, max, 0.36);
+  }
+
   onEvent(e: SimEvent, sim: Sim) {
-    const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
     switch (e.type) {
       case 'step': {
         const p = sim.playerPos();
@@ -199,7 +192,7 @@ export class Renderer {
       }
       case 'hit':
         this.shake = 0.35;
-        this.float(pick(this.texts.hit), e.x, e.y, '#e84a4a', true, 1.1);
+        this.say('hit', '#c0392b', 1.5);
         for (let i = 0; i < 5; i++) {
           const a = (i / 5) * Math.PI * 2;
           this.spawn('star', e.x, e.y + 0.4, Math.cos(a) * 1.4, Math.sin(a) * 1.4 + 1, 0.7, 0.13, '#f7c948');
@@ -212,8 +205,11 @@ export class Renderer {
       case 'honk':
         this.float(this.texts.honk, e.x, e.y + 0.55, '#ffffff', false, 0.8, 0.32);
         break;
-      case 'umbrella':
-        this.float(this.texts.umbrella, e.x, e.y, '#e84a4a', true, 1.2);
+      case 'slipper':
+        this.say('slipper', '#c0392b', 1.4);
+        // l'onda d'urto della ciabatta: si vede fin dove arriva
+        this.spawn('ring', e.x, e.y + 0.5, 0, 0, 0.55, 0.2, '#3d8bd9');
+        this.shake = 0.12;
         break;
       case 'pickup':
         if (e.kind === 'candy') {
@@ -222,10 +218,11 @@ export class Renderer {
             const a = (i / 8) * Math.PI * 2;
             this.spawn('spark', e.x, e.y, Math.cos(a) * 2, Math.sin(a) * 2, 0.45, 0.08, i % 2 ? '#ffffff' : '#f7c948');
           }
-        } else if (e.kind === 'coffee') {
-          this.float(this.texts.coffee, e.x, e.y + 0.3, '#6b3f25');
-        } else {
-          this.float(this.texts.extraUmbrella, e.x, e.y + 0.3, '#e84a4a');
+        } else if (e.kind === 'coffee') this.float(this.texts.coffee, e.x, e.y + 0.3, '#6b3f25');
+        else if (e.kind === 'slipper') this.float(this.texts.extraSlipper, e.x, e.y + 0.3, '#3d8bd9');
+        else {
+          this.float(this.texts.extraHeart, e.x, e.y + 0.3, '#e84a4a');
+          this.say('happy', '#3fae5a');
         }
         break;
       case 'splash':
@@ -236,26 +233,31 @@ export class Renderer {
         for (let i = 0; i < 6; i++)
           this.spawn('feather', e.x + (Math.random() - 0.5), e.y + Math.random() * 0.5, (Math.random() - 0.5) * 0.8, 0.3, 1.4, 0.06, '#c9cfdb');
         break;
-      case 'win': {
-        this.winT = 0;
-        const p = sim.playerPos();
-        this.float(pick(this.texts.win), p.x, p.y, '#3fae5a', true, 1.6);
-        for (let i = 0; i < 70; i++)
-          this.spawn(
-            'confetti',
-            p.x + (Math.random() - 0.5) * 3,
-            p.y + 1 + Math.random() * 2,
-            (Math.random() - 0.5) * 4,
-            2 + Math.random() * 4,
-            2.2,
-            0.09,
-            CONFETTI[i % CONFETTI.length],
-          );
+      case 'stormNear':
+        this.float(this.texts.storm, sim.playerPos().x, sim.playerPos().y - 0.9, '#ffffff', false, 1.4, 0.34);
         break;
-      }
+      case 'thunder':
+        if (!this.reduceMotion) this.flash = 0.35;
+        break;
+      case 'over':
+        if (e.cause === 'storm') {
+          const p = sim.playerPos();
+          for (let i = 0; i < 16; i++)
+            this.spawn('drop', p.x + (Math.random() - 0.5) * 1.2, p.y + 1.2, (Math.random() - 0.5) * 1.5, -1 - Math.random() * 2, 0.8, 0.05, '#7fc4ea');
+        }
+        break;
       default:
         break;
     }
+  }
+
+  celebrate() {
+    const sim = this.sim;
+    if (!sim) return;
+    const p = sim.playerPos();
+    this.say('happy', '#3fae5a', 1.6);
+    for (let i = 0; i < 60; i++)
+      this.spawn('confetti', p.x + (Math.random() - 0.5) * 3, p.y + 1 + Math.random() * 2, (Math.random() - 0.5) * 4, 2 + Math.random() * 4, 2.2, 0.09, CONFETTI[i % CONFETTI.length]);
   }
 
   private updateFx(dt: number) {
@@ -283,6 +285,8 @@ export class Renderer {
     for (const f of this.floaters) f.t += dt;
     this.floaters = this.floaters.filter((f) => f.t < f.max);
     this.shake = Math.max(0, this.shake - dt);
+    this.flash = Math.max(0, this.flash - dt);
+    if (this.enterT >= 0) this.enterT += dt;
   }
 
   // ------------------------------------------------------------ disegno
@@ -295,11 +299,10 @@ export class Renderer {
     return this.canvas.height - (y - this.camY) * this.s;
   }
 
-  render(sim: Sim, outfit: Outfit, dt: number, showPlayer = true) {
+  render(sim: Sim, look: Look, dt: number, showPlayer = true) {
     const ctx = this.ctx;
     this.time += dt;
     this.updateFx(dt);
-    if (this.winT >= 0) this.winT += dt;
 
     const k = 1 - Math.exp(-dt * 5);
     this.camY += (this.camTarget(sim) - this.camY) * k;
@@ -317,12 +320,12 @@ export class Renderer {
 
     const s = this.s;
     const visTop = this.camY + this.canvas.height / s;
-    const rTop = Math.min(sim.rows.length - 1, Math.ceil(visTop));
+    const rTop = Math.ceil(visTop) + 1;
     const rBot = Math.max(0, Math.floor(this.camY) - 1);
 
     // semafori del tram
     for (let r = rBot; r <= rTop; r++) {
-      const rs = sim.rows[r];
+      const rs = sim.rowState(r);
       if (rs.def.kind !== 'tram' || !rs.warn) continue;
       const on = Math.floor(sim.time * 4) % 2 === 0;
       ctx.fillStyle = on ? 'rgba(255,214,70,0.33)' : 'rgba(232,74,74,0.22)';
@@ -344,39 +347,38 @@ export class Renderer {
     const pp = sim.playerPos();
     const playerRow = Math.floor(pp.y);
     for (let r = rTop; r >= rBot; r--) {
-      const rs = sim.rows[r];
+      const rs = sim.rowState(r);
+      const def = rs.def;
       const cy = this.Y(r + 0.5);
       // oggetti da raccogliere
-      for (const pk of sim.pickups) {
-        if (pk.row !== r) continue;
+      def.pickups.forEach((pk, i) => {
         const sp = this.statics.pickup(pk.kind);
-        if (pk.taken) {
-          if (pk.takenT > 0.35) continue;
-          const a = 1 - pk.takenT / 0.35;
-          ctx.globalAlpha = a;
-          const lift = pk.takenT * 2.5 * s;
-          ctx.drawImage(sp.canvas, this.X(pk.col + 0.5) - sp.ox, cy - sp.oy - lift);
+        const taken = rs.takenT[i];
+        if (taken >= 0) {
+          if (taken > 0.35) return;
+          ctx.globalAlpha = 1 - taken / 0.35;
+          ctx.drawImage(sp.canvas, this.X(pk.col + 0.5) - sp.ox, cy - sp.oy - taken * 2.5 * s);
           ctx.globalAlpha = 1;
-          continue;
+          return;
         }
-        const bob = Math.sin(this.time * 3 + pk.col) * 0.06 * s;
+        const bob = Math.sin(this.time * 3 + pk.col + r) * 0.06 * s;
         ctx.fillStyle = 'rgba(30,25,50,0.15)';
         ctx.beginPath();
         ctx.ellipse(this.X(pk.col + 0.5), cy + 0.22 * s, 0.2 * s, 0.06 * s, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.drawImage(sp.canvas, this.X(pk.col + 0.5) - sp.ox, cy - sp.oy - bob);
+      });
+      // arredo (nelle piazze le celle bloccate sono i palazzi, già disegnati nello sfondo)
+      if (!(def.stop && r > def.stop.entry)) {
+        for (const b of def.blockers) {
+          const sp = this.statics.prop(b.kind);
+          ctx.drawImage(sp.canvas, this.X(b.col + 0.5) - sp.ox, cy - sp.oy);
+        }
       }
-      // arredo
-      for (const b of rs.def.blockers) {
-        const sp = this.statics.prop(b.kind);
-        ctx.drawImage(sp.canvas, this.X(b.col + 0.5) - sp.ox, cy - sp.oy);
-      }
-      // piccioni a terra
       for (const g of sim.pigeons) {
         if (g.gone || g.flying || Math.floor(g.y) !== r) continue;
         this.withWorld(g.x, g.y - 0.1, g.flip ? -1 : 1, () => drawPigeon(ctx, g.t, false));
       }
-      // veicoli
       for (const v of rs.vehicles) {
         const x = this.X(v.x);
         if (x < -4 * s || x > this.canvas.width + 4 * s) continue;
@@ -394,21 +396,20 @@ export class Renderer {
           ctx.arc(bx, by, 0.06 * s, 0, Math.PI * 2);
           ctx.fill();
         }
-        if (v.stopT > UMBRELLA_STOP - 0.8 && v.stopT > 0) this.exclaim(x, cy - 0.75 * s);
+        if (v.stopT > SLIPPER_STOP - 0.8 && v.stopT > 0) this.exclaim(x, cy - 0.75 * s);
       }
-      if (showPlayer && r === playerRow) this.drawPlayer(sim, outfit);
+      if (showPlayer && r === playerRow) this.drawPlayer(sim, look);
     }
-    if (showPlayer && (playerRow > rTop || playerRow < rBot)) this.drawPlayer(sim, outfit);
+    if (showPlayer && (playerRow > rTop || playerRow < rBot)) this.drawPlayer(sim, look);
 
-    // piccioni in volo, sopra tutto
     for (const g of sim.pigeons) {
       if (g.gone || !g.flying) continue;
       this.withWorld(g.x, g.y, g.flip ? -1 : 1, () => drawPigeon(ctx, g.t, true));
     }
 
     this.drawParticles();
+    this.drawStorm(sim);
 
-    // colonne fuori gioco (schermi larghi, es. iPad)
     if (this.xLeft < -0.05) {
       ctx.fillStyle = 'rgba(30,25,60,0.28)';
       ctx.fillRect(0, 0, this.X(0), this.canvas.height);
@@ -416,6 +417,54 @@ export class Renderer {
     }
 
     this.drawFloaters(sim);
+
+    if (this.flash > 0) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = `rgba(255,255,255,${(this.flash / 0.35) * 0.35})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
+
+  /** Il temporale che insegue la nonna: nuvoloni, pioggia e tutto più scuro sotto. */
+  private drawStorm(sim: Sim) {
+    const ctx = this.ctx;
+    const s = this.s;
+    const edge = this.Y(sim.stormY);
+    if (edge > this.canvas.height + s * 1.5) return;
+    const W = this.canvas.width;
+    const top = Math.max(-s, edge);
+    const g = ctx.createLinearGradient(0, top - s * 0.6, 0, top + s * 2.5);
+    g.addColorStop(0, 'rgba(52,56,86,0)');
+    g.addColorStop(0.3, 'rgba(52,56,86,0.55)');
+    g.addColorStop(1, 'rgba(40,42,68,0.78)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, top - s * 0.6, W, this.canvas.height - top + s);
+    // pioggia
+    ctx.strokeStyle = 'rgba(190,215,255,0.55)';
+    ctx.lineWidth = Math.max(1, s * 0.025);
+    ctx.beginPath();
+    const t = this.time;
+    for (let i = 0; i < 70; i++) {
+      const x = ((i * 97.13 + t * s * 0.9) % (W + s)) - s * 0.5;
+      const span = this.canvas.height - top + s;
+      const y = top + ((i * 53.7 + t * s * 9) % span);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - s * 0.08, y + s * 0.32);
+    }
+    ctx.stroke();
+    // nuvoloni sul fronte
+    for (let i = -1; i < W / s + 1; i++) {
+      const x = (i + 0.5 + Math.sin(t * 0.7 + i) * 0.08) * s;
+      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
+      ctx.fillStyle = '#5b6079';
+      ctx.beginPath();
+      ctx.arc(x, edge - s * 0.1, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#6d7290';
+      ctx.beginPath();
+      ctx.arc(x - r * 0.25, edge - s * 0.25, r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   private withWorld(x: number, y: number, flipX: number, fn: () => void) {
@@ -444,27 +493,28 @@ export class Renderer {
     ctx.fillText('!', x, y + 0.01 * s);
   }
 
-  private drawPlayer(sim: Sim, outfit: Outfit) {
+  private drawPlayer(sim: Sim, look: Look) {
     const ctx = this.ctx;
     const p = sim.player;
     let { x, y } = sim.playerPos();
     let alpha = 1;
-    if (sim.status === 'won' && this.winT >= 0) {
-      // la coppia entra nel negozio
-      const k = Math.min(1, Math.max(0, (this.winT - 0.6) / 1.1));
-      x += (COLS / 2 - x) * k;
-      y += 0.55 * k;
-      alpha = 1 - Math.max(0, (this.winT - 1.3) / 0.5);
-      if (alpha <= 0) return;
-    }
-    if (p.invuln > 0 && Math.floor(sim.time * 14) % 2 === 0) alpha *= 0.35;
     let mood: Mood = 'idle';
-    if (sim.status === 'won') mood = 'happy';
-    else if (p.stunned > 0 || sim.status === 'lost') mood = 'angry';
-    else if (p.umbrellaT > 0) mood = 'umbrella';
+    if (this.enterT >= 0 && this.enterStop && sim.status === 'stop') {
+      // la coppia va verso la porta del palazzo e sparisce dentro
+      const k = Math.min(1, this.enterT / 0.7);
+      const door = { x: 2.35, y: this.enterStop.entry + 1.05 };
+      x += (door.x - x) * k;
+      y += (door.y - y) * k;
+      alpha = 1 - Math.max(0, (this.enterT - 0.5) / 0.3);
+      mood = 'walk';
+      if (alpha <= 0) return;
+    } else if (p.stunned > 0 || sim.status === 'over') mood = 'angry';
+    else if (p.slipperT > 0) mood = 'slipper';
     else if (p.moving) mood = 'walk';
+    if (p.invuln > 0 && Math.floor(sim.time * 14) % 2 === 0) alpha *= 0.35;
     const hop = p.moving ? Math.sin(Math.PI * p.t) * 0.2 : 0;
-    const legs = p.moving ? Math.sin(Math.PI * p.t) * (p.steps % 2 ? 1 : -1) : 0;
+    const walkT = this.enterT >= 0 ? this.enterT * 3 : p.t;
+    const legs = p.moving || this.enterT >= 0 ? Math.sin(Math.PI * walkT) * (p.steps % 2 ? 1 : -1) : 0;
     let bx = 0;
     let by = 0;
     if (p.bumpT > 0) {
@@ -476,9 +526,8 @@ export class Renderer {
     this.withWorld(x + bx, y - 0.24 + by, 1, () => {
       const breathe = mood === 'idle' ? 1 + Math.sin(sim.time * 2.6) * 0.012 : 1;
       ctx.scale(1, breathe);
-      drawPair(ctx, outfit, { facing: p.facing, legs, mood, t: sim.time }, hop);
+      drawPair(ctx, look, { facing: p.facing, legs, mood, t: sim.time }, hop);
       if (p.coffeeT > 0 && sim.status === 'playing') {
-        // vapore del caffè: la nonna ha il turbo
         const tt = sim.time * 3;
         ctx.strokeStyle = 'rgba(255,255,255,0.8)';
         ctx.lineWidth = 0.03;
@@ -495,7 +544,6 @@ export class Renderer {
       }
     });
     if (p.stunned > 0) {
-      // stelline che girano sopra la testa
       for (let i = 0; i < 3; i++) {
         const a = sim.time * 6 + (i * Math.PI * 2) / 3;
         const sx = x - 0.17 * p.facing + Math.cos(a) * 0.22;
@@ -540,6 +588,16 @@ export class Renderer {
           ctx.arc(x, y, p.size * s * (1 + k * 2), 0, Math.PI * 2);
           ctx.fill();
           break;
+        case 'ring': {
+          // raggio fino a ~5 righe: la portata della ciabatta
+          ctx.globalAlpha = (1 - k) * 0.9;
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = s * 0.12 * (1 - k) + 1;
+          ctx.beginPath();
+          ctx.ellipse(x, y, s * 5 * k + s * 0.3, s * 4 * k + s * 0.2, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
         case 'star':
           ctx.globalAlpha = 1 - k;
           this.star(x, y, p.size * s, p.rot, p.color);
@@ -593,7 +651,7 @@ export class Renderer {
       ctx.font = `700 ${fontPx}px ${FONT}`;
       if (f.bubble) {
         // fumetto sopra la testa della nonna
-        const pos = sim.status === 'won' ? { x: f.x, y: f.y } : sim.playerPos();
+        const pos = sim.playerPos();
         const pop = Math.min(1, f.t / 0.12);
         const scale = 0.6 + 0.4 * pop;
         const x = this.X(pos.x - 0.17 * sim.player.facing);
@@ -639,10 +697,5 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
   }
-
-  /** Posizione a schermo (punti CSS) di una cella: serve all'HUD per i suggerimenti. */
-  screenOf(x: number, y: number): { x: number; y: number } {
-    const d = this.layout.dpr;
-    return { x: this.X(x) / d, y: this.Y(y) / d };
-  }
 }
+

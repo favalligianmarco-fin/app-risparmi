@@ -1,5 +1,5 @@
-import type { VehicleKind } from '../levels';
-import { VEHICLE_LENGTH } from '../levels';
+import type { VehicleKind } from '../world';
+import { VEHICLE_LENGTH } from '../world';
 import { CAR_COLORS, INK, SCOOTER_COLORS, circle, ctx2d, ellipse, fillInk, makeCanvas, rr, shade } from './paint';
 import type { Ctx } from './paint';
 

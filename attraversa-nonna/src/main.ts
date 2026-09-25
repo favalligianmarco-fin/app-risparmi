@@ -7,24 +7,49 @@ import { GameAudio } from './audio';
 import type { Sfx } from './audio';
 import { t } from './i18n';
 import { Input } from './input';
-import { generateLevel } from './levels';
+import { runMinigame } from './minigames';
 import { initNative, notify, setHaptics, tap } from './native';
-import { OUTFITS, outfitById } from './outfits';
+import { NONNE, nonnaById } from './nonne';
+import { bgStats } from './render/background';
+import type { BuildingStyle, IconKind } from './render/background';
 import { Renderer } from './render/renderer';
 import { Sim } from './sim';
-import type { Dir } from './sim';
+import type { Dir, OverCause } from './sim';
 import { defaultSave, loadSave, storeSave } from './storage';
 import type { Save } from './storage';
-import { UI, destPhrase } from './ui';
-import type { Controller } from './ui';
+import { UI } from './ui';
+import type { Controller, HintKind } from './ui';
+import type { Shop, Stop, StopKind } from './world';
 
-type Mode = 'title' | 'menu' | 'playing' | 'paused' | 'result';
+type Mode = 'title' | 'menu' | 'playing' | 'paused' | 'stop' | 'over';
 
 const HUD_HEIGHT = 64;
 
 /** Tempi medi (ms) di simulazione e disegno: utili per misurare la fluidità nei test. */
-const perf = { sim: 0, render: 0 };
+const perf = { sim: 0, render: 0, bg: bgStats };
 (window as unknown as { __perf: typeof perf }).__perf = perf;
+
+const STOP_LOOK: Record<StopKind, { icon: IconKind; sign: string; ink: string }> = {
+  tiramisu: { icon: 'home', sign: '#e84a4a', ink: '#ffffff' },
+  poste: { icon: 'post', sign: '#f7c948', ink: '#2d3e8c' },
+  ago: { icon: 'spool', sign: '#9f86e0', ink: '#ffffff' },
+  pranzo: { icon: 'trattoria', sign: '#3f8f4f', ink: '#ffffff' },
+};
+const SHOP_LOOK: Record<Shop, { icon: IconKind; sign: string; ink: string }> = {
+  bakery: { icon: 'bakery', sign: '#c98a4b', ink: '#fff4dc' },
+  grocer: { icon: 'market', sign: '#e8763f', ink: '#ffffff' },
+  newsstand: { icon: 'newsstand', sign: '#3d8bd9', ink: '#ffffff' },
+  florist: { icon: 'florist', sign: '#f28bb6', ink: '#ffffff' },
+  gelato: { icon: 'gelato', sign: '#5fd3b0', ink: '#ffffff' },
+  pharmacy: { icon: 'pharmacy', sign: '#3fae5a', ink: '#ffffff' },
+};
+
+function stopStyle(stop: Stop): { left: BuildingStyle; right: BuildingStyle } {
+  return {
+    left: { label: t.stops[stop.kind], ...STOP_LOOK[stop.kind] },
+    right: { label: t.shops[stop.shop], ...SHOP_LOOK[stop.shop] },
+  };
+}
 
 function safeTop(): number {
   const probe = document.createElement('div');
@@ -35,6 +60,8 @@ function safeTop(): number {
   return h;
 }
 
+const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
+
 class Game implements Controller {
   save: Save = defaultSave();
   private audio = new GameAudio();
@@ -44,29 +71,32 @@ class Game implements Controller {
   private input: Input;
   private sim!: Sim;
   private mode: Mode = 'title';
-  private levelN = 1;
   private last = 0;
-  private hint: 'tap' | 'swipe' | 'umbrella' | null = null;
-  private resultTimer = 0;
   private attract = false;
+  private hint: HintKind | null = null;
+  private hintTimer = 0;
+  /** 0 tocca, 1 scorri, 2 ciabatta, 3 finito */
+  private tutorial = 3;
+  private overTimer = 0;
   /** Risoluzione massima del canvas: scende da sola se il telefono non tiene i 60 fps. */
   private dprCap = 3;
   private slowFor = 0;
 
   constructor() {
-    this.renderer.texts = { ...t.fx, destination: '' };
+    this.renderer.texts = { ...t.fx };
+    this.renderer.styleOf = stopStyle;
     this.renderer.reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     this.input = new Input(
       this.canvas,
       (d) => this.onMove(d),
-      () => this.useUmbrella(),
+      () => this.useSlipper(),
       () => this.pause(),
     );
-    const umbrella = document.getElementById('btn-umbrella')!;
-    umbrella.addEventListener('pointerdown', (e) => {
+    const slipper = document.getElementById('btn-slipper')!;
+    slipper.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.useUmbrella();
+      this.useSlipper();
     });
     document.getElementById('btn-pause')!.addEventListener('click', () => {
       this.audio.play('click');
@@ -100,6 +130,7 @@ class Game implements Controller {
     this.audio.setMusic(this.save.music);
     this.audio.setSfx(this.save.sfx);
     setHaptics(this.save.haptics);
+    this.applyNonna();
     await initNative();
     try {
       await Promise.race([
@@ -109,14 +140,13 @@ class Game implements Controller {
     } catch {
       /* si usa il carattere di sistema */
     }
-    this.layout(false);
+    this.layout();
     this.openTitle();
     this.last = performance.now();
     requestAnimationFrame((ts) => this.frame(ts));
-    document.documentElement.classList.add('ready');
   }
 
-  private layout(rebuild = true) {
+  private layout() {
     const dpr = Math.min(window.devicePixelRatio || 1, this.dprCap);
     this.renderer.resize({
       width: window.innerWidth,
@@ -124,11 +154,15 @@ class Game implements Controller {
       dpr,
       hudTop: safeTop() + HUD_HEIGHT,
     });
-    if (rebuild && this.sim) this.renderer.setLevel(this.sim, destPhrase(this.sim.level.n)[0]);
   }
 
-  private get outfit() {
-    return outfitById(this.save.outfit);
+  private get nonna() {
+    return nonnaById(this.save.nonna);
+  }
+
+  private applyNonna() {
+    const n = this.nonna;
+    this.renderer.voice = { hit: n.hit, slipper: n.slipper, happy: n.happy };
   }
 
   // ------------------------------------------------------------ ciclo principale
@@ -136,7 +170,7 @@ class Game implements Controller {
   private frame(ts: number) {
     const dt = Math.min(0.1, Math.max(0, (ts - this.last) / 1000));
     this.last = ts;
-    if (this.mode !== 'paused') {
+    if (this.mode !== 'paused' && this.mode !== 'stop') {
       const t0 = performance.now();
       this.sim.update(dt);
       perf.sim = perf.sim * 0.95 + (performance.now() - t0) * 0.05;
@@ -146,9 +180,12 @@ class Game implements Controller {
       this.ui.updateHud(this.sim);
       this.watchSmoothness(dt);
     }
-    const t0 = performance.now();
-    this.renderer.render(this.sim, this.outfit, this.mode === 'paused' ? 0 : dt);
-    perf.render = perf.render * 0.95 + (performance.now() - t0) * 0.05;
+    // durante il minigioco la strada è coperta: non serve ridisegnarla
+    if (!(this.mode === 'stop' && document.querySelector('.mg'))) {
+      const t0 = performance.now();
+      this.renderer.render(this.sim, this.nonna.look, this.mode === 'paused' ? 0 : dt);
+      perf.render = perf.render * 0.95 + (performance.now() - t0) * 0.05;
+    }
     requestAnimationFrame((n) => this.frame(n));
   }
 
@@ -168,7 +205,7 @@ class Game implements Controller {
     this.audio.play(name);
   }
 
-  sfx(name: 'click' | 'star') {
+  sfx(name: 'click') {
     this.audio.play(name);
   }
 
@@ -184,8 +221,7 @@ class Game implements Controller {
         case 'step':
           this.playSfx('step');
           tap('light');
-          if (this.hint === 'tap') this.setHint(null);
-          this.ui.hideBanner();
+          if (this.tutorial === 0) this.advanceTutorial();
           break;
         case 'bump':
           this.playSfx('bump');
@@ -202,17 +238,17 @@ class Game implements Controller {
           this.playSfx('honk');
           break;
         case 'pickup':
-          this.playSfx(e.kind === 'candy' ? 'candy' : e.kind === 'coffee' ? 'coffee' : 'umbrellaPickup');
+          this.playSfx(e.kind === 'candy' ? 'candy' : e.kind === 'coffee' ? 'coffee' : e.kind === 'slipper' ? 'slipperPickup' : 'heart');
           tap('medium');
           break;
-        case 'umbrella':
-          this.playSfx('umbrella');
+        case 'slipper':
+          this.playSfx('slipper');
           tap('heavy');
-          if (this.hint === 'umbrella') this.setHint(null);
-          this.ui.pulseUmbrella(false);
+          if (this.hint === 'slipper') this.setHint(null);
+          this.ui.pulseSlipper(false);
           break;
-        case 'noUmbrella':
-          this.playSfx('noUmbrella');
+        case 'noSlipper':
+          this.playSfx('noSlipper');
           break;
         case 'tramWarn':
           this.playSfx('tram');
@@ -223,11 +259,22 @@ class Game implements Controller {
         case 'pigeons':
           this.playSfx('pigeons');
           break;
-        case 'win':
-          this.onWin();
+        case 'thunder':
+          this.playSfx('thunder');
           break;
-        case 'lose':
-          this.onLose();
+        case 'stormNear':
+          this.playSfx('thunder');
+          tap('medium');
+          if (!this.hint) this.flashHint('storm', 2200);
+          break;
+        case 'meter':
+          if (this.tutorial === 2 && e.meters >= 18) this.advanceTutorial();
+          break;
+        case 'stop':
+          this.onStop(e.stop);
+          break;
+        case 'over':
+          this.onOver(e.cause);
           break;
         default:
           break;
@@ -238,82 +285,119 @@ class Game implements Controller {
 
   private onMove(d: Dir) {
     if (this.mode !== 'playing') return;
-    if (this.hint === 'swipe' && (d === 'left' || d === 'right')) this.setHint(null);
+    if (this.tutorial === 1 && (d === 'left' || d === 'right')) this.advanceTutorial();
     this.sim.input(d);
   }
 
-  private useUmbrella() {
+  private useSlipper() {
     if (this.mode !== 'playing') return;
-    this.sim.useUmbrella();
+    this.sim.useSlipper();
   }
 
-  private setHint(h: 'tap' | 'swipe' | 'umbrella' | null) {
+  private setHint(h: HintKind | null) {
+    window.clearTimeout(this.hintTimer);
     this.hint = h;
     this.ui.showHint(h);
   }
 
-  private onWin() {
-    this.input.enabled = false;
-    this.playSfx('win');
-    notify('success');
-    const sim = this.sim;
-    const n = this.levelN;
-    const stars = sim.stars();
-    this.save.stars[n] = Math.max(this.save.stars[n] ?? 0, stars);
-    this.save.unlocked = Math.max(this.save.unlocked, n + 1);
-    this.save.candies += sim.candies;
-    storeSave(this.save);
-    window.clearTimeout(this.resultTimer);
-    this.resultTimer = window.setTimeout(() => {
-      if (this.mode !== 'playing' || this.sim !== sim) return;
-      this.mode = 'result';
-      this.ui.showHud(false);
-      this.setHint(null);
-      this.ui.showResult({
-        won: true,
-        level: n,
-        stars,
-        hits: sim.player.hits,
-        time: sim.elapsed,
-        par: sim.level.parTime,
-        candies: sim.candies,
-        candiesTotal: sim.candiesTotal,
-      });
-    }, 1900);
+  private flashHint(h: HintKind, ms: number) {
+    this.setHint(h);
+    this.hintTimer = window.setTimeout(() => {
+      if (this.hint === h) this.setHint(null);
+    }, ms);
   }
 
-  private onLose() {
+  /** Suggerimenti della prima partita: tocca, scorri, ciabatta. */
+  private advanceTutorial() {
+    this.tutorial++;
+    if (this.tutorial === 1) {
+      this.setHint(null);
+      window.setTimeout(() => {
+        if (this.tutorial === 1 && this.mode === 'playing') this.flashHint('swipe', 6000);
+      }, 1200);
+    } else if (this.tutorial === 2) {
+      if (this.hint === 'swipe') this.setHint(null);
+    } else if (this.tutorial === 3) {
+      this.flashHint('slipper', 4500);
+      this.ui.pulseSlipper(true);
+      window.setTimeout(() => this.ui.pulseSlipper(false), 4500);
+      this.save.tutorial = true;
+      storeSave(this.save);
+    }
+  }
+
+  private onStop(stop: Stop) {
     this.input.enabled = false;
-    this.playSfx('lose');
+    this.setHint(null);
+    this.renderer.enter(stop);
+    this.playSfx('stop');
+    const sim = this.sim;
+    window.setTimeout(async () => {
+      if (this.sim !== sim) return;
+      this.mode = 'stop';
+      this.ui.showHud(false);
+      const res = await runMinigame(
+        stop.kind,
+        {
+          look: this.nonna.look,
+          sfx: (n) => this.playSfx(n),
+          haptic: (k) => tap(k),
+        },
+        document.getElementById('app')!,
+      );
+      if (this.sim !== sim) return;
+      sim.finishStop(res.success, res.reward);
+      this.renderer.leave();
+      if (sim.status === 'over') {
+        this.handleEvents();
+        return;
+      }
+      if (res.success) this.renderer.celebrate();
+      this.ui.showHud(true);
+      this.mode = 'playing';
+      this.input.enabled = true;
+      this.last = performance.now();
+    }, 850);
+  }
+
+  private onOver(cause: OverCause) {
+    this.input.enabled = false;
+    this.setHint(null);
+    this.mode = 'over';
+    this.playSfx('over');
     notify('warning');
     const sim = this.sim;
-    window.clearTimeout(this.resultTimer);
-    this.resultTimer = window.setTimeout(() => {
-      if (this.mode !== 'playing' || this.sim !== sim) return;
-      this.mode = 'result';
+    const meters = sim.meters;
+    const newBest = meters > this.save.best;
+    const prevBest = this.save.best;
+    this.save.best = Math.max(this.save.best, meters);
+    this.save.candies += sim.candies;
+    this.save.runs++;
+    if (meters >= 25) this.save.tutorial = true;
+    storeSave(this.save);
+    window.clearTimeout(this.overTimer);
+    this.overTimer = window.setTimeout(() => {
+      if (this.sim !== sim || this.mode !== 'over') return;
       this.ui.showHud(false);
-      this.setHint(null);
-      this.ui.showResult({ won: false, level: this.levelN, stars: 0, hits: 0, time: 0, par: 0, candies: 0, candiesTotal: 0 });
-    }, 700);
+      this.ui.showOver({ cause, meters, best: newBest ? meters : prevBest, newBest: newBest && prevBest > 0, candies: sim.candies, stops: sim.stopsDone });
+    }, 1100);
   }
 
   // ------------------------------------------------------------ Controller (azioni dei menu)
 
   private setAttract() {
-    // sullo sfondo dei menu: un incrocio vero, col traffico che scorre e la coppia sullo spartitraffico
-    const lv = generateLevel(5);
-    const sim = new Sim(lv, 12345);
-    const median = lv.rows.findIndex((r) => r.kind === 'median');
-    sim.player.row = sim.player.fromRow = median > 0 ? median : 0;
-    sim.player.col = sim.player.fromCol = 4;
-    sim.player.umbrellas = 0;
+    // sullo sfondo dei menu: una strada vera, col traffico che scorre e la coppia sullo spartitraffico
+    const sim = new Sim(20260925);
+    sim.world.ensure(60);
+    const median = sim.world.rows.findIndex((r, i) => i > 3 && r.kind === 'median');
+    sim.placePlayer(median > 0 ? median : 0, 4);
     this.sim = sim;
     this.attract = true;
-    this.renderer.setLevel(sim, destPhrase(lv.n)[0]);
+    this.renderer.setSim(sim);
   }
 
   openTitle() {
-    window.clearTimeout(this.resultTimer);
+    window.clearTimeout(this.overTimer);
     this.input.enabled = false;
     this.ui.showHud(false);
     this.setHint(null);
@@ -323,37 +407,28 @@ class Game implements Controller {
   }
 
   play() {
-    this.startLevel(this.save.unlocked);
-  }
-
-  startLevel(n: number) {
-    window.clearTimeout(this.resultTimer);
-    this.levelN = n;
-    const lv = generateLevel(n);
-    this.sim = new Sim(lv);
+    window.clearTimeout(this.overTimer);
+    this.sim = new Sim(randomSeed());
     this.attract = false;
-    this.renderer.setLevel(this.sim, destPhrase(n)[0]);
+    this.renderer.setSim(this.sim);
     this.ui.clear();
     this.ui.showHud(true);
-    this.ui.setLevel(n, this.sim);
+    this.ui.resetHud(this.sim);
     this.mode = 'playing';
     this.input.enabled = true;
     this.last = performance.now();
-    const intro = lv.intro;
-    this.setHint(intro === 'tap' ? 'tap' : intro === 'swipe' ? 'swipe' : null);
-    if (intro === 'umbrella') this.ui.pulseUmbrella(true);
-    const bannerHint = intro === 'umbrella' || intro === 'bike' || intro === 'tram' || intro === 'bus' ? t.hints[intro] : null;
-    this.ui.showBanner(n, bannerHint);
+    this.tutorial = this.save.tutorial ? 3 : 0;
+    if (!this.save.tutorial) this.sim.graceRows = 12;
+    this.setHint(this.tutorial === 0 ? 'tap' : null);
   }
 
-  openLevels() {
-    this.mode = 'menu';
-    this.ui.showLevels();
+  restart() {
+    this.play();
   }
 
-  openWardrobe() {
-    this.mode = 'menu';
-    this.ui.showWardrobe();
+  openNonne() {
+    this.mode = this.mode === 'over' ? 'over' : 'menu';
+    this.ui.showNonne();
   }
 
   openSettings(from: 'title' | 'pause') {
@@ -369,7 +444,6 @@ class Game implements Controller {
     if (this.mode === 'playing' && this.sim.status === 'playing') {
       this.mode = 'paused';
       this.input.enabled = false;
-      this.ui.hideBanner();
     }
     if (this.mode === 'paused') this.ui.showPause();
   }
@@ -382,36 +456,34 @@ class Game implements Controller {
     this.last = performance.now();
   }
 
-  restart() {
-    this.startLevel(this.levelN);
-  }
-
-  next() {
-    this.startLevel(this.levelN + 1);
-  }
-
   toMenu() {
     this.attract = false;
     this.openTitle();
   }
 
   buy(id: string) {
-    const o = OUTFITS.find((x) => x.id === id);
-    if (!o || this.save.owned.includes(id) || this.save.candies < o.price) return;
-    this.save.candies -= o.price;
+    const n = NONNE.find((x) => x.id === id);
+    if (!n || this.save.owned.includes(id) || this.save.candies < n.price) return;
+    this.save.candies -= n.price;
     this.save.owned.push(id);
-    this.save.outfit = id;
-    storeSave(this.save);
+    this.choose(id);
     this.playSfx('buy');
     notify('success');
-    this.ui.showWardrobe();
   }
 
-  equip(id: string) {
+  choose(id: string) {
     if (!this.save.owned.includes(id)) return;
-    this.save.outfit = id;
+    this.save.nonna = id;
     storeSave(this.save);
-    this.ui.showWardrobe();
+    this.applyNonna();
+    this.ui.showNonne();
+  }
+
+  listen(id: string): string {
+    const n = nonnaById(id);
+    const all = [...n.hit, ...n.slipper];
+    this.playSfx('honk');
+    return all[Math.floor(Math.random() * all.length)];
   }
 
   setOption(key: 'music' | 'sfx' | 'haptics', on: boolean) {
@@ -432,6 +504,7 @@ class Game implements Controller {
     fresh.haptics = this.save.haptics;
     this.save = fresh;
     storeSave(this.save);
+    this.applyNonna();
     this.openTitle();
   }
 }

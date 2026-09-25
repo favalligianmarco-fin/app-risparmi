@@ -1,10 +1,10 @@
-import { COLS, VEHICLE_LENGTH, isHazard } from './levels';
-import type { LevelDef, PickupKind, RowDef, VehicleKind } from './levels';
 import { Rng } from './rng';
+import { COLS, STOP_ROWS, VEHICLE_LENGTH, World, isHazard } from './world';
+import type { PickupKind, RowDef, Stop, VehicleKind } from './world';
 
 /**
- * Simulazione pura del gioco: niente DOM, niente canvas. Il renderer la legge,
- * l'input la comanda, i test la fanno girare da sola (anche con un bot).
+ * Simulazione pura della corsa infinita: niente DOM, niente canvas. Il renderer
+ * la legge, l'input la comanda, i test la fanno girare da sola (anche con un bot).
  */
 
 /** Spazio fuori dallo schermo in cui i veicoli nascono e spariscono, in celle. */
@@ -12,19 +12,31 @@ export const MARGIN = 5;
 export const STEP_TIME = 0.2;
 export const STEP_TIME_COFFEE = 0.12;
 export const COFFEE_TIME = 7;
-export const UMBRELLA_STOP = 2.6;
+export const SLIPPER_STOP = 2.6;
 export const MAX_HEARTS = 3;
+export const MAX_SLIPPERS = 3;
 /** Metà larghezza della "scatola" di collisione della coppia nonna+scout. */
 export const HIT_HALF_WIDTH = 0.26;
+/** Il temporale non resta mai più di così indietro rispetto al punto più lontano raggiunto. */
+export const STORM_LAG = 12;
 const STUN_TIME = 1.05;
 const INVULN_TIME = 1.4;
 const SLIP_TIME = 0.35;
 const ACCEL = 5;
 const DECEL = 16;
 const TRAM_WARN = 1.8;
+/** Righe simulate sotto e sopra la coppia: il resto del mondo è fermo. */
+const LIVE_BELOW = 12;
+const LIVE_ABOVE = 26;
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
-export type Status = 'playing' | 'won' | 'lost';
+export type Status = 'playing' | 'stop' | 'over';
+export type OverCause = 'hits' | 'storm' | 'stop';
+
+/** Velocità del temporale (righe al secondo) in funzione dei metri già fatti. */
+export function stormSpeed(meters: number) {
+  return Math.min(0.85, 0.3 + meters / 1500);
+}
 
 export interface Vehicle {
   id: number;
@@ -35,7 +47,7 @@ export interface Vehicle {
   len: number;
   dir: 1 | -1;
   speed: number;
-  /** Fermo per l'ombrello della nonna. */
+  /** Fermo per la ciabatta della nonna. */
   stopT: number;
   /** Fermo dopo una frenata d'emergenza. */
   hitStopT: number;
@@ -48,21 +60,15 @@ export interface RowState {
   def: RowDef;
   /** Veicoli della corsia, dal primo (il più avanti) all'ultimo. */
   vehicles: Vehicle[];
+  live: boolean;
   nextGap: number;
   tramT: number;
-  /** Un tram sta attraversando (dall'ingresso all'uscita). */
   tramOn: boolean;
   warn: boolean;
   blocked: boolean[];
   puddle: boolean[];
-}
-
-export interface Pickup {
-  row: number;
-  col: number;
-  kind: PickupKind;
-  taken: boolean;
-  takenT: number;
+  /** Per ogni oggetto di def.pickups: da quanto è stato raccolto (-1 = ancora lì). */
+  takenT: number[];
 }
 
 export interface Pigeon {
@@ -94,8 +100,8 @@ export interface Player {
   slip: number;
   safeCol: number;
   safeRow: number;
-  umbrellas: number;
-  umbrellaT: number;
+  slippers: number;
+  slipperT: number;
   coffeeT: number;
   bumpT: number;
   bumpDx: number;
@@ -108,8 +114,8 @@ export type SimEvent =
   | { type: 'bump' }
   | { type: 'hit'; x: number; y: number }
   | { type: 'pickup'; kind: PickupKind; x: number; y: number }
-  | { type: 'umbrella'; x: number; y: number }
-  | { type: 'noUmbrella' }
+  | { type: 'slipper'; x: number; y: number }
+  | { type: 'noSlipper' }
   | { type: 'honk'; x: number; y: number }
   | { type: 'screech'; x: number; y: number }
   | { type: 'tramWarn'; row: number }
@@ -117,71 +123,51 @@ export type SimEvent =
   | { type: 'splash'; x: number; y: number }
   | { type: 'pigeons'; x: number; y: number }
   | { type: 'respawn' }
-  | { type: 'win' }
-  | { type: 'lose' };
+  | { type: 'meter'; meters: number }
+  | { type: 'stop'; stop: Stop }
+  | { type: 'stormNear' }
+  | { type: 'thunder' }
+  | { type: 'over'; cause: OverCause };
 
 const easeStep = (t: number) => t * t * (3 - 2 * t);
 
 export class Sim {
-  readonly level: LevelDef;
-  readonly rows: RowState[];
+  readonly world: World;
+  readonly rows: RowState[] = [];
   readonly player: Player;
-  readonly pickups: Pickup[];
   readonly pigeons: Pigeon[] = [];
   events: SimEvent[] = [];
   status: Status = 'playing';
+  overCause: OverCause | null = null;
   started = false;
   elapsed = 0;
   time = 0;
   candies = 0;
-  candiesTotal: number;
+  /** Riga più lontana raggiunta: sono i metri percorsi. */
+  maxRow = 0;
+  stopsDone = 0;
+  /** Il fronte del temporale, in righe. */
+  stormY = -9;
+  currentStop: Stop | null = null;
+  /** Nella prima partita gli spaventi prima di questa riga non tolgono cuori. */
+  graceRows = 0;
+  private doneStops = new Set<number>();
   private rng: Rng;
   private nextId = 1;
-  private pendingLose = false;
+  private pendingOver: OverCause | null = null;
+  private liveLo = 0;
+  private liveHi = -1;
+  private stormWarned = false;
+  private thunderT = 6;
 
-  constructor(level: LevelDef, seed = level.seed) {
-    this.level = level;
+  constructor(seed: number) {
+    this.world = new World(seed);
     this.rng = new Rng(seed ^ 0x9e3779b9);
-    this.rows = level.rows.map((def) => {
-      const blocked = Array<boolean>(COLS).fill(false);
-      const puddle = Array<boolean>(COLS).fill(false);
-      for (const b of def.blockers) blocked[b.col] = true;
-      for (const c of def.puddles) puddle[c] = true;
-      return {
-        def,
-        vehicles: [],
-        nextGap: 0,
-        tramT: 0,
-        tramOn: false,
-        warn: false,
-        blocked,
-        puddle,
-      };
-    });
-    this.rows.forEach((rs, row) => this.fillRow(rs, row));
-
-    this.pickups = level.pickups.map((p) => ({ ...p, taken: false, takenT: 0 }));
-    this.candiesTotal = this.pickups.filter((p) => p.kind === 'candy').length;
-
-    level.rows.forEach((def, row) => {
-      for (const col of def.pigeons) {
-        this.pigeons.push({
-          x: col + 0.5 + this.rng.range(-0.2, 0.2),
-          y: row + 0.5 + this.rng.range(-0.15, 0.15),
-          flying: false,
-          vx: 0,
-          vy: 0,
-          t: this.rng.range(0, 10),
-          flip: this.rng.chance(0.5),
-          gone: false,
-        });
-      }
-    });
-
+    const startCol = Math.floor(COLS / 2);
     this.player = {
-      col: level.startCol,
+      col: startCol,
       row: 0,
-      fromCol: level.startCol,
+      fromCol: startCol,
       fromRow: 0,
       t: 1,
       moving: false,
@@ -193,16 +179,101 @@ export class Sim {
       invuln: 0,
       stunned: 0,
       slip: 0,
-      safeCol: level.startCol,
+      safeCol: startCol,
       safeRow: 0,
-      umbrellas: level.umbrellas,
-      umbrellaT: 0,
+      slippers: 1,
+      slipperT: 0,
       coffeeT: 0,
       bumpT: 0,
       bumpDx: 0,
       bumpDy: 0,
       steps: 0,
     };
+    this.refreshLive();
+  }
+
+  get meters() {
+    return this.maxRow;
+  }
+
+  /** Mette la coppia ferma in una cella (per i test e per preparare gli screenshot). */
+  placePlayer(row: number, col: number) {
+    const p = this.player;
+    p.row = p.fromRow = p.safeRow = row;
+    p.col = p.fromCol = p.safeCol = col;
+    p.t = 1;
+    p.moving = false;
+    this.maxRow = Math.max(this.maxRow, row);
+    this.stormY = Math.min(this.stormY, row - STORM_LAG);
+    this.refreshLive();
+  }
+
+  // ---------------------------------------------------------------- righe
+
+  /** Stato della riga `i` (la genera se serve). */
+  rowState(i: number): RowState {
+    while (this.rows.length <= i) {
+      const idx = this.rows.length;
+      const def = this.world.row(idx);
+      const blocked = Array<boolean>(COLS).fill(false);
+      const puddle = Array<boolean>(COLS).fill(false);
+      for (const b of def.blockers) blocked[b.col] = true;
+      for (const c of def.puddles) puddle[c] = true;
+      this.rows.push({
+        def,
+        vehicles: [],
+        live: false,
+        nextGap: 0,
+        tramT: 0,
+        tramOn: false,
+        warn: false,
+        blocked,
+        puddle,
+        takenT: def.pickups.map(() => -1),
+      });
+      for (const col of def.pigeons) {
+        this.pigeons.push({
+          x: col + 0.5 + this.rng.range(-0.2, 0.2),
+          y: idx + 0.5 + this.rng.range(-0.15, 0.15),
+          flying: false,
+          vx: 0,
+          vy: 0,
+          t: this.rng.range(0, 10),
+          flip: this.rng.chance(0.5),
+          gone: false,
+        });
+      }
+    }
+    return this.rows[i];
+  }
+
+  /** Attiva le righe vicine alla coppia e spegne quelle rimaste indietro. */
+  private refreshLive() {
+    const p = this.player;
+    const lo = Math.max(0, Math.min(p.row, p.fromRow) - LIVE_BELOW);
+    const hi = Math.max(p.row, p.fromRow) + LIVE_ABOVE;
+    for (let i = this.liveLo; i < lo && i <= this.liveHi; i++) {
+      const rs = this.rows[i];
+      rs.live = false;
+      rs.vehicles.length = 0;
+      rs.warn = false;
+      rs.tramOn = false;
+    }
+    for (let i = lo; i <= hi; i++) {
+      const rs = this.rowState(i);
+      if (!rs.live) {
+        rs.live = true;
+        this.fillRow(rs, i);
+      }
+    }
+    this.liveLo = lo;
+    this.liveHi = hi;
+    // i piccioni rimasti molto indietro non servono più
+    if (this.pigeons.length > 80) {
+      const keep = this.pigeons.filter((g) => !g.gone && g.y > lo - 2);
+      this.pigeons.length = 0;
+      this.pigeons.push(...keep);
+    }
   }
 
   // ---------------------------------------------------------------- traffico
@@ -237,11 +308,14 @@ export class Sim {
     return this.rng.range(def.gapMin, def.gapMax);
   }
 
-  /** Riempie la corsia a inizio livello, così il traffico è già in movimento. */
+  /** Riempie la corsia quando entra in gioco, così il traffico è già in movimento. */
   private fillRow(rs: RowState, row: number) {
     const def = rs.def;
+    rs.vehicles.length = 0;
     if (def.kind === 'tram') {
-      rs.tramT = this.rng.range(2.8, 5);
+      rs.tramT = this.rng.range(2.8, def.tramEvery[1]);
+      rs.tramOn = false;
+      rs.warn = false;
       return;
     }
     if (def.kind !== 'road' && def.kind !== 'bike') return;
@@ -263,19 +337,17 @@ export class Sim {
     const dir = def.dir;
     const list = rs.vehicles;
 
-    if (def.kind === 'tram') {
-      if (!rs.tramOn) {
-        rs.tramT -= h;
-        if (!rs.warn && rs.tramT <= TRAM_WARN) {
-          rs.warn = true;
-          this.events.push({ type: 'tramWarn', row });
-        }
-        if (rs.tramT <= 0) {
-          const center = this.entryPos(dir) - VEHICLE_LENGTH.tram / 2;
-          list.push(this.makeVehicle(row, def, 'tram', center));
-          rs.tramOn = true;
-          this.events.push({ type: 'tramPass', row });
-        }
+    if (def.kind === 'tram' && !rs.tramOn) {
+      rs.tramT -= h;
+      if (!rs.warn && rs.tramT <= TRAM_WARN) {
+        rs.warn = true;
+        this.events.push({ type: 'tramWarn', row });
+      }
+      if (rs.tramT <= 0) {
+        const center = this.entryPos(dir) - VEHICLE_LENGTH.tram / 2;
+        list.push(this.makeVehicle(row, def, 'tram', center));
+        rs.tramOn = true;
+        this.events.push({ type: 'tramPass', row });
       }
     }
 
@@ -337,7 +409,7 @@ export class Sim {
     };
   }
 
-  /** La corsia in cui la coppia "conta" per le collisioni: si cambia a metà salto. */
+  /** La riga in cui la coppia "conta" per le collisioni: si cambia a metà salto. */
   logicalRow(): number {
     const p = this.player;
     return p.moving && p.t < 0.5 ? p.fromRow : p.row;
@@ -350,36 +422,36 @@ export class Sim {
     else p.queued = dir;
   }
 
-  canUseUmbrella() {
-    return this.status === 'playing' && this.player.stunned <= 0 && this.player.umbrellas > 0;
+  canUseSlipper() {
+    return this.status === 'playing' && this.player.stunned <= 0 && this.player.slippers > 0;
   }
 
-  useUmbrella(): boolean {
+  /** La nonna alza la ciabatta: chi la vede inchioda. Il tram no. */
+  useSlipper(): boolean {
     const p = this.player;
     if (this.status !== 'playing' || p.stunned > 0) return false;
-    if (p.umbrellas <= 0) {
-      this.events.push({ type: 'noUmbrella' });
+    if (p.slippers <= 0) {
+      this.events.push({ type: 'noSlipper' });
       return false;
     }
-    p.umbrellas--;
-    p.umbrellaT = 0.9;
+    p.slippers--;
+    p.slipperT = 0.9;
     this.started = true;
-    for (const rs of this.rows) {
-      for (const v of rs.vehicles) {
+    for (let r = Math.max(0, p.row - 1); r <= p.row + 4; r++) {
+      for (const v of this.rowState(r).vehicles) {
         if (v.kind === 'tram') continue;
-        if (v.row < p.row - 1 || v.row > p.row + 4) continue;
-        v.stopT = UMBRELLA_STOP;
+        v.stopT = SLIPPER_STOP;
         v.honkT = this.rng.chance(0.35) ? this.rng.range(0.5, 1.8) : 0;
       }
     }
     const pos = this.playerPos();
-    this.events.push({ type: 'umbrella', x: pos.x, y: pos.y });
+    this.events.push({ type: 'slipper', x: pos.x, y: pos.y });
     return true;
   }
 
   /** Veicolo fermo (o quasi) che occupa la cella: ci si sbatte contro, non si viene investiti. */
   private parkedAt(row: number, col: number): boolean {
-    const rs = this.rows[row];
+    const rs = this.rowState(row);
     const cx = col + 0.5;
     return rs.vehicles.some((v) => v.speed < 0.6 && Math.abs(v.x - cx) < v.len / 2 + HIT_HALF_WIDTH);
   }
@@ -391,8 +463,7 @@ export class Sim {
     const nc = p.col + dx;
     const nr = p.row + dy;
     if (dx) p.facing = dx > 0 ? 1 : -1;
-    const blocked =
-      nc < 0 || nc >= COLS || nr < 0 || nr >= this.rows.length || this.rows[nr].blocked[nc] || this.parkedAt(nr, nc);
+    const blocked = nc < 0 || nc >= COLS || nr < 0 || this.rowState(nr).blocked[nc] || this.parkedAt(nr, nc);
     if (blocked) {
       p.bumpT = 0.18;
       p.bumpDx = dx;
@@ -409,46 +480,101 @@ export class Sim {
     p.stepDur = p.coffeeT > 0 ? STEP_TIME_COFFEE : STEP_TIME;
     p.steps++;
     this.started = true;
+    this.refreshLive();
     this.events.push({ type: 'step' });
   }
 
   private arrive() {
     const p = this.player;
-    const rs = this.rows[p.row];
-    const kind = rs.def.kind;
-    if (!isHazard(kind)) {
+    const rs = this.rowState(p.row);
+    const def = rs.def;
+    if (!isHazard(def.kind)) {
       p.safeCol = p.col;
       p.safeRow = p.row;
+    }
+    if (p.row > this.maxRow) {
+      this.maxRow = p.row;
+      this.events.push({ type: 'meter', meters: this.maxRow });
     }
     if (rs.puddle[p.col]) {
       p.slip = SLIP_TIME;
       this.events.push({ type: 'splash', x: p.col + 0.5, y: p.row + 0.5 });
     }
-    for (const pk of this.pickups) {
-      if (pk.taken || pk.row !== p.row || pk.col !== p.col) continue;
-      pk.taken = true;
+    def.pickups.forEach((pk, i) => {
+      if (rs.takenT[i] >= 0 || pk.col !== p.col) return;
+      rs.takenT[i] = 0;
       if (pk.kind === 'candy') this.candies++;
       else if (pk.kind === 'coffee') p.coffeeT = COFFEE_TIME;
-      else p.umbrellas++;
-      this.events.push({ type: 'pickup', kind: pk.kind, x: pk.col + 0.5, y: pk.row + 0.5 });
-    }
-    if (kind === 'goal') {
-      this.status = 'won';
+      else if (pk.kind === 'slipper') p.slippers = Math.min(MAX_SLIPPERS, p.slippers + 1);
+      else p.hearts = Math.min(MAX_HEARTS, p.hearts + 1);
+      this.events.push({ type: 'pickup', kind: pk.kind, x: pk.col + 0.5, y: p.row + 0.5 });
+    });
+    const stop = def.stop;
+    if (stop && p.row === stop.entry && !this.doneStops.has(stop.entry)) {
+      this.doneStops.add(stop.entry);
+      this.status = 'stop';
+      this.currentStop = stop;
       p.queued = null;
-      this.events.push({ type: 'win' });
+      this.events.push({ type: 'stop', stop });
     }
+  }
+
+  /**
+   * Fine del minigioco della sosta. Se è andato bene: caramelle e un cuore in
+   * regalo; se è andato male la nonna si offende e costa un cuore.
+   */
+  finishStop(success: boolean, reward = 0) {
+    const stop = this.currentStop;
+    if (this.status !== 'stop' || !stop) return;
+    const p = this.player;
+    this.currentStop = null;
+    if (success) {
+      this.stopsDone++;
+      this.candies += reward;
+      p.hearts = Math.min(MAX_HEARTS, p.hearts + 1);
+    } else {
+      p.hearts--;
+      p.hits++;
+      if (p.hearts <= 0) {
+        this.status = 'over';
+        this.overCause = 'stop';
+        this.events.push({ type: 'over', cause: 'stop' });
+        return;
+      }
+    }
+    // la coppia esce dalla piazza, in cima, e il temporale riparte da lontano
+    const exit = stop.entry + STOP_ROWS - 1;
+    p.col = p.fromCol = p.safeCol = 4;
+    p.row = p.fromRow = p.safeRow = exit;
+    p.t = 1;
+    p.moving = false;
+    this.maxRow = Math.max(this.maxRow, exit);
+    this.stormY = Math.min(this.stormY, exit - STORM_LAG);
+    this.stormWarned = false;
+    this.status = 'playing';
+    this.refreshLive();
+    this.events.push({ type: 'meter', meters: this.maxRow });
   }
 
   private hit(v: Vehicle, px: number) {
     const p = this.player;
-    p.hearts--;
-    p.hits++;
+    if (v.row >= this.graceRows) {
+      p.hearts--;
+      p.hits++;
+    }
     p.stunned = STUN_TIME;
     p.moving = false; // la coppia resta "congelata" dov'era, a metà salto
     p.queued = null;
-    // Frenata all'ultimo: il veicolo si ferma a un palmo dalla nonna.
-    const rs = this.rows[v.row];
-    if (v.kind !== 'tram') {
+    const rs = this.rowState(v.row);
+    const y = this.logicalRow() + 0.5;
+    if (v.kind === 'tram') {
+      // il tram non frena: lo scout tira indietro la nonna appena in tempo
+      p.col = p.fromCol = p.safeCol;
+      p.row = p.fromRow = p.safeRow;
+      p.t = 1;
+      this.events.push({ type: 'hit', x: p.col + 0.5, y: p.row + 0.5 });
+    } else {
+      // frenata all'ultimo: il veicolo si ferma a un palmo dalla nonna
       v.x = px - v.dir * (v.len / 2 + HIT_HALF_WIDTH + 0.12);
       v.speed = 0;
       v.hitStopT = 1.3;
@@ -462,19 +588,10 @@ export class Sim {
           f.speed = Math.min(f.speed, lead.speed);
         }
       }
-    }
-    const y = this.logicalRow() + 0.5;
-    if (v.kind === 'tram') {
-      // il tram non frena: lo scout tira indietro la nonna appena in tempo
-      p.col = p.fromCol = p.safeCol;
-      p.row = p.fromRow = p.safeRow;
-      p.t = 1;
-      this.events.push({ type: 'hit', x: p.col + 0.5, y: p.row + 0.5 });
-    } else {
       this.events.push({ type: 'screech', x: v.x, y });
       this.events.push({ type: 'hit', x: px, y });
     }
-    if (p.hearts <= 0) this.pendingLose = true;
+    if (p.hearts <= 0) this.pendingOver = 'hits';
   }
 
   private respawn() {
@@ -487,22 +604,25 @@ export class Sim {
     this.events.push({ type: 'respawn' });
   }
 
+  private end(cause: OverCause) {
+    this.status = 'over';
+    this.overCause = cause;
+    this.player.queued = null;
+    this.events.push({ type: 'over', cause });
+  }
+
   private updatePlayer(h: number) {
     const p = this.player;
     if (p.invuln > 0) p.invuln -= h;
-    if (p.umbrellaT > 0) p.umbrellaT -= h;
+    if (p.slipperT > 0) p.slipperT -= h;
     if (p.coffeeT > 0) p.coffeeT -= h;
     if (p.bumpT > 0) p.bumpT -= h;
     if (p.stunned > 0) {
       p.stunned -= h;
       if (p.stunned <= 0) {
         p.stunned = 0;
-        if (this.pendingLose) {
-          this.status = 'lost';
-          this.events.push({ type: 'lose' });
-        } else {
-          this.respawn();
-        }
+        if (this.pendingOver) this.end(this.pendingOver);
+        else this.respawn();
       }
       return;
     }
@@ -526,7 +646,7 @@ export class Sim {
     const p = this.player;
     if (this.status !== 'playing' || p.stunned > 0 || p.invuln > 0) return;
     const row = this.logicalRow();
-    const rs = this.rows[row];
+    const rs = this.rowState(row);
     if (!isHazard(rs.def.kind)) return;
     const px = this.playerPos().x;
     for (const v of rs.vehicles) {
@@ -535,6 +655,24 @@ export class Sim {
         return;
       }
     }
+  }
+
+  /** Il temporale avanza da dietro: se raggiunge la nonna, la corsa è finita. */
+  private updateStorm(h: number) {
+    if (!this.started) return;
+    this.stormY = Math.max(this.stormY + stormSpeed(this.maxRow) * h, this.maxRow - STORM_LAG);
+    const py = this.playerPos().y;
+    const gap = py - this.stormY;
+    if (gap < 3.2 && !this.stormWarned) {
+      this.stormWarned = true;
+      this.events.push({ type: 'stormNear' });
+    } else if (gap > 4.5) this.stormWarned = false;
+    this.thunderT -= h;
+    if (this.thunderT <= 0) {
+      this.thunderT = this.rng.range(5, 11);
+      if (gap < 9) this.events.push({ type: 'thunder' });
+    }
+    if (gap < 0.15 && this.player.stunned <= 0) this.end('storm');
   }
 
   private updatePigeons(h: number) {
@@ -557,13 +695,14 @@ export class Sim {
       } else {
         g.x += g.vx * h;
         g.y += g.vy * h;
-        if (g.y > this.rows.length + 8) g.gone = true;
+        if (g.y > pos.y + 20) g.gone = true;
       }
     }
     if (scattered) this.events.push({ type: 'pigeons', x: pos.x, y: pos.y });
   }
 
   update(dt: number) {
+    if (this.status === 'stop') return;
     const clamped = Math.min(dt, 0.1);
     const steps = Math.max(1, Math.ceil(clamped / (1 / 60)));
     const h = clamped / steps;
@@ -573,20 +712,16 @@ export class Sim {
   private tick(h: number) {
     this.time += h;
     if (this.status === 'playing' && this.started) this.elapsed += h;
-    this.rows.forEach((rs, row) => this.updateRow(rs, row, h));
+    for (let i = this.liveLo; i <= this.liveHi; i++) {
+      const rs = this.rows[i];
+      if (rs.live) this.updateRow(rs, i, h);
+      for (let k = 0; k < rs.takenT.length; k++) if (rs.takenT[k] >= 0) rs.takenT[k] += h;
+    }
     if (this.status === 'playing') {
       this.updatePlayer(h);
-      this.checkCollisions();
-    } else if (this.status === 'won') {
-      const p = this.player;
-      if (p.umbrellaT > 0) p.umbrellaT -= h;
+      if (this.status === 'playing') this.checkCollisions();
+      if (this.status === 'playing') this.updateStorm(h);
     }
     this.updatePigeons(h);
-    for (const pk of this.pickups) if (pk.taken) pk.takenT += h;
-  }
-
-  stars(): number {
-    if (this.status !== 'won') return 0;
-    return 1 + (this.player.hits === 0 ? 1 : 0) + (this.elapsed <= this.level.parTime ? 1 : 0);
   }
 }

@@ -1,13 +1,13 @@
 // Disegna icona e splash con lo stesso codice del gioco. Usato da make-assets.mjs.
 import '@fontsource/fredoka/latin-700.css';
-import { OUTFITS } from '../src/outfits';
+import { nonnaById } from '../src/nonne';
 import { drawNonna, drawScout } from '../src/render/characters';
 import { INK, ellipse, rr } from '../src/render/paint';
 import { paintVehicle } from '../src/render/vehicles';
 
 type Ctx = CanvasRenderingContext2D;
 
-function pair(ctx: Ctx, x: number, y: number, s: number, mood: 'umbrella' | 'happy' | 'idle') {
+function pair(ctx: Ctx, x: number, y: number, s: number, mood: 'slipper' | 'happy' | 'idle') {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(s, s);
@@ -18,11 +18,11 @@ function pair(ctx: Ctx, x: number, y: number, s: number, mood: 'umbrella' | 'hap
   ctx.fill();
   ctx.save();
   ctx.translate(0.2, 0);
-  drawScout(ctx, 0, mood === 'umbrella' ? 'idle' : mood, 0.3);
+  drawScout(ctx, 0, mood === 'slipper' ? 'idle' : mood, 0.3);
   ctx.restore();
   ctx.save();
   ctx.translate(-0.17, 0);
-  drawNonna(ctx, OUTFITS[0], 0, mood, 0.02);
+  drawNonna(ctx, nonnaById('veneto').look, 0, mood, 0.02);
   ctx.restore();
   ctx.restore();
 }
@@ -59,8 +59,8 @@ function icon(size: number): HTMLCanvasElement {
   ctx.lineJoin = 'round';
   paintVehicle(ctx, 'car', 0);
   ctx.restore();
-  // la coppia, con l'ombrello alzato
-  pair(ctx, 410 * k, 955 * k, 570 * k, 'umbrella');
+  // la coppia, con la ciabatta alzata
+  pair(ctx, 500 * k, 965 * k, 610 * k, 'slipper');
   return c;
 }
 

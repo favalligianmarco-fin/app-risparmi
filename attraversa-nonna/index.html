@@ -17,29 +17,27 @@
           <button id="btn-pause" class="round-btn" type="button" aria-label="Pausa">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
           </button>
-          <div class="hud-title">
-            <div id="hud-level" class="hud-level"></div>
-            <div id="hud-dest" class="hud-dest"></div>
+          <div class="hud-meters">
+            <div id="hud-meters" class="meters">0 m</div>
+            <div id="hud-best" class="best"></div>
           </div>
           <div class="hud-stats">
             <div id="hud-hearts" class="hud-hearts"></div>
-            <div class="hud-row">
-              <span id="hud-candies" class="chip chip-candy"></span>
-              <span id="hud-time" class="chip chip-time"></span>
-            </div>
+            <span id="hud-candies" class="chip chip-candy"></span>
           </div>
         </div>
         <div id="hud-coffee" class="coffee-meter" hidden><span></span></div>
-        <button id="btn-umbrella" class="umbrella-btn" type="button" aria-label="Ombrello">
+        <button id="btn-slipper" class="slipper-btn" type="button" aria-label="Ciabatta">
           <svg viewBox="0 0 64 64" aria-hidden="true">
-            <path d="M8 34 A24 24 0 0 1 56 34 Q50 29 44 34 Q38 29 32 34 Q26 29 20 34 Q14 29 8 34 Z" fill="#fff" stroke="#2d2a3e" stroke-width="3.5" stroke-linejoin="round" />
-            <path d="M32 34 V50 a5 5 0 0 1 -10 0" fill="none" stroke="#2d2a3e" stroke-width="4" stroke-linecap="round" />
-            <circle cx="32" cy="10" r="3" fill="#f7c948" stroke="#2d2a3e" stroke-width="2" />
+            <g transform="rotate(-28 32 34)">
+              <path d="M32 58 C20 58 18 36 21 22 C23 10 41 10 43 22 C46 36 44 58 32 58 Z" fill="#f2d7b0" stroke="#2d2a3e" stroke-width="3.5" stroke-linejoin="round" />
+              <path d="M19.5 30 Q32 23 44.5 30 L43.5 17 Q32 11 20.5 17 Z" fill="#3d8bd9" stroke="#2d2a3e" stroke-width="3" stroke-linejoin="round" />
+              <path d="M22 25 Q32 19 42 25" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" />
+            </g>
           </svg>
-          <span id="umbrella-count" class="badge"></span>
+          <span id="slipper-count" class="badge"></span>
         </button>
         <div id="hint" class="hint" hidden></div>
-        <div id="banner" class="banner" hidden></div>
       </div>
 
       <div id="layer"></div>

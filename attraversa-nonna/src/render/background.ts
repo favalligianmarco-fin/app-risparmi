@@ -1,5 +1,4 @@
-import { COLS } from '../levels';
-import type { Destination, LevelDef, RowDef } from '../levels';
+import type { RowDef, Stop, World } from '../world';
 import { INK, cellText, circle, ctx2d, ellipse, fillInk, makeCanvas, rr, shade } from './paint';
 import type { Ctx } from './paint';
 
@@ -9,7 +8,8 @@ import type { Ctx } from './paint';
  */
 
 const CHUNK_ROWS = 6;
-export const FACADE_ROWS = 8;
+/** Altezza delle facciate dei palazzi nelle piazze, in righe. */
+export const BUILDING_HEIGHT = 2.55;
 
 function hash(a: number, b: number, c = 0): number {
   let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647);
@@ -123,9 +123,22 @@ function puddle(ctx: Ctx, col: number) {
 function paintRowBase(ctx: Ctx, def: RowDef, row: number, sp: Span) {
   switch (def.kind) {
     case 'sidewalk':
-    case 'goal':
       sidewalkTiles(ctx, sp, row);
       break;
+    case 'plaza': {
+      // lastre di pietra grandi: si capisce subito che è una piazza
+      ctx.fillStyle = '#cbc3b4';
+      ctx.fillRect(sp.x0, 0, sp.x1 - sp.x0, 1);
+      for (let y = 0; y < 1; y += 0.5) {
+        const off = (Math.round(y * 2) + row) % 2 ? 0.375 : 0;
+        for (let x = Math.floor(sp.x0) - off; x < sp.x1; x += 0.75) {
+          const v = hash(Math.round(x * 4), row * 2 + y * 2, 5);
+          ctx.fillStyle = v < 0.33 ? '#ddd6c8' : v < 0.66 ? '#e6e0d3' : '#d6cebf';
+          ctx.fillRect(x + 0.02, y + 0.02, 0.71, 0.46);
+        }
+      }
+      break;
+    }
     case 'road':
       asphalt(ctx, sp, row);
       if (def.busLane) {
@@ -194,10 +207,10 @@ function paintRowBase(ctx: Ctx, def: RowDef, row: number, sp: Span) {
 const isRoadLike = (d?: RowDef) => !!d && (d.kind === 'road' || d.kind === 'bike');
 
 /** Secondo passaggio: segnaletica e cordoli, disegnati sopra i bordi tra le corsie. */
-function paintRowMarks(ctx: Ctx, rows: RowDef[], row: number, sp: Span) {
-  const def = rows[row];
-  const above = rows[row + 1];
-  const below = rows[row - 1];
+function paintRowMarks(ctx: Ctx, rowAt: (i: number) => RowDef | undefined, row: number, sp: Span) {
+  const def = rowAt(row)!;
+  const above = rowAt(row + 1);
+  const below = rowAt(row - 1);
   if (def.kind === 'road') {
     if (above?.kind === 'road') {
       if (above.dir === def.dir) dashed(ctx, sp, 0);
@@ -227,10 +240,11 @@ function paintRowMarks(ctx: Ctx, rows: RowDef[], row: number, sp: Span) {
     }
   }
   // cordoli tra zone pedonali/aiuole e carreggiata
-  const walkable = def.kind === 'sidewalk' || def.kind === 'goal' || def.kind === 'median';
+  const walkable = def.kind === 'sidewalk' || def.kind === 'plaza' || def.kind === 'median';
   if (walkable) {
-    if (above && above.kind !== def.kind) curb(ctx, sp, 0, true);
-    if (below && below.kind !== def.kind) curb(ctx, sp, 1, false);
+    const differs = (o: RowDef) => o.kind !== def.kind && !(o.kind === 'plaza' && def.kind === 'sidewalk') && !(o.kind === 'sidewalk' && def.kind === 'plaza');
+    if (above && differs(above)) curb(ctx, sp, 0, true);
+    if (below && differs(below)) curb(ctx, sp, 1, false);
   }
   if (def.kind === 'median') {
     ctx.fillStyle = 'rgba(0,0,0,0.08)';
@@ -244,26 +258,17 @@ function paintRowMarks(ctx: Ctx, rows: RowDef[], row: number, sp: Span) {
 const WALLS = ['#f2c48d', '#e8a488', '#f5dd9d', '#efb3a5', '#e7c9a0', '#f0d0b0'];
 const SHUTTER = '#4f9a5a';
 
-export interface DestinationStyle {
-  sign: string;
-  color: string;
-  label: string;
-}
-
-export const DEST_STYLE: Record<Destination, { sign: string; color: string }> = {
-  pharmacy: { sign: '#3fae5a', color: '#ffffff' },
-  bakery: { sign: '#c98a4b', color: '#fff4dc' },
-  market: { sign: '#e8763f', color: '#ffffff' },
-  church: { sign: '#b9a17f', color: '#fff8e8' },
-  post: { sign: '#f7c948', color: '#2d3e8c' },
-  hairdresser: { sign: '#f28bb6', color: '#ffffff' },
-  newsstand: { sign: '#3d8bd9', color: '#ffffff' },
-  florist: { sign: '#9f86e0', color: '#ffffff' },
-  gelato: { sign: '#5fd3b0', color: '#ffffff' },
-  cafe: { sign: '#6b3f25', color: '#ffe9c9' },
-  library: { sign: '#8e3b46', color: '#fff4dc' },
-  bocce: { sign: '#3f8f4f', color: '#ffffff' },
-};
+export type IconKind =
+  | 'pharmacy'
+  | 'bakery'
+  | 'market'
+  | 'post'
+  | 'newsstand'
+  | 'florist'
+  | 'gelato'
+  | 'home'
+  | 'spool'
+  | 'trattoria';
 
 function window2(ctx: Ctx, x: number, y: number, w: number, h: number, open: boolean, flower: boolean) {
   rr(ctx, x - 0.04, y - 0.04, w + 0.08, h + 0.08, 0.03);
@@ -297,7 +302,7 @@ function window2(ctx: Ctx, x: number, y: number, w: number, h: number, open: boo
   }
 }
 
-function destIcon(ctx: Ctx, d: Destination, x: number, y: number, r: number) {
+export function destIcon(ctx: Ctx, d: IconKind, x: number, y: number, r: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(r, r);
@@ -341,18 +346,6 @@ function destIcon(ctx: Ctx, d: Destination, x: number, y: number, r: number) {
         fillInk(ctx, c, 0.1);
       }
       break;
-    case 'church':
-      ctx.beginPath();
-      ctx.moveTo(0, -1);
-      ctx.lineTo(0.7, -0.3);
-      ctx.lineTo(0.7, 0.9);
-      ctx.lineTo(-0.7, 0.9);
-      ctx.lineTo(-0.7, -0.3);
-      ctx.closePath();
-      fillInk(ctx, '#fff8e8', 0.1);
-      circle(ctx, 0, 0.05, 0.25);
-      fillInk(ctx, '#f7c948', 0.08);
-      break;
     case 'post':
       rr(ctx, -0.9, -0.6, 1.8, 1.2, 0.15);
       fillInk(ctx, '#ffffff', 0.1);
@@ -361,20 +354,6 @@ function destIcon(ctx: Ctx, d: Destination, x: number, y: number, r: number) {
       ctx.moveTo(-0.9, -0.55);
       ctx.lineTo(0, 0.1);
       ctx.lineTo(0.9, -0.55);
-      ctx.stroke();
-      break;
-    case 'hairdresser':
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.18;
-      circle(ctx, -0.45, 0.55, 0.3);
-      ctx.stroke();
-      circle(ctx, 0.45, 0.55, 0.3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-0.3, 0.3);
-      ctx.lineTo(0.5, -0.9);
-      ctx.moveTo(0.3, 0.3);
-      ctx.lineTo(-0.5, -0.9);
       ctx.stroke();
       break;
     case 'newsstand':
@@ -402,186 +381,126 @@ function destIcon(ctx: Ctx, d: Destination, x: number, y: number, r: number) {
       circle(ctx, 0, -0.45, 0.48);
       fillInk(ctx, '#f7b2c4', 0.1);
       break;
-    case 'cafe':
-      rr(ctx, -0.7, -0.5, 1.1, 1.0, 0.3);
-      fillInk(ctx, '#ffffff', 0.1);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.18;
+    case 'home':
       ctx.beginPath();
-      ctx.arc(0.5, 0, 0.3, -Math.PI / 2, Math.PI / 2);
+      ctx.moveTo(0, -1);
+      ctx.lineTo(0.95, -0.1);
+      ctx.lineTo(0.7, -0.1);
+      ctx.lineTo(0.7, 0.9);
+      ctx.lineTo(-0.7, 0.9);
+      ctx.lineTo(-0.7, -0.1);
+      ctx.lineTo(-0.95, -0.1);
+      ctx.closePath();
+      fillInk(ctx, '#ffffff', 0.1);
+      ctx.beginPath();
+      ctx.moveTo(0, 0.05);
+      ctx.bezierCurveTo(-0.35, -0.25, -0.35, 0.3, 0, 0.55);
+      ctx.bezierCurveTo(0.35, 0.3, 0.35, -0.25, 0, 0.05);
+      fillInk(ctx, '#e84a4a', 0.06);
+      break;
+    case 'spool':
+      rr(ctx, -0.6, -0.9, 1.2, 0.25, 0.08);
+      fillInk(ctx, '#c9975a', 0.1);
+      rr(ctx, -0.6, 0.65, 1.2, 0.25, 0.08);
+      fillInk(ctx, '#c9975a', 0.1);
+      rr(ctx, -0.45, -0.65, 0.9, 1.3, 0.05);
+      fillInk(ctx, '#e84a4a', 0.1);
+      ctx.strokeStyle = '#b83535';
+      ctx.lineWidth = 0.06;
+      ctx.beginPath();
+      for (let y = -0.5; y < 0.6; y += 0.2) {
+        ctx.moveTo(-0.45, y);
+        ctx.lineTo(0.45, y + 0.1);
+      }
       ctx.stroke();
       break;
-    case 'library':
-      for (const [dx, c] of [
-        [-0.55, '#e84a4a'],
-        [0, '#5aa9f0'],
-        [0.55, '#f7c948'],
-      ] as const) {
-        rr(ctx, dx - 0.22, -0.9, 0.44, 1.8, 0.08);
-        fillInk(ctx, c, 0.1);
-      }
-      break;
-    case 'bocce':
-      for (const [dx, c] of [
-        [-0.5, '#e84a4a'],
-        [0.5, '#5aa9f0'],
-      ] as const) {
-        circle(ctx, dx, 0.2, 0.5);
-        fillInk(ctx, c, 0.1);
-      }
-      circle(ctx, 0, -0.55, 0.22);
-      fillInk(ctx, '#ffffff', 0.08);
+    case 'trattoria':
+      circle(ctx, 0, 0.1, 0.8);
+      fillInk(ctx, '#ffffff', 0.1);
+      circle(ctx, 0, 0.1, 0.5);
+      fillInk(ctx, '#f7c948', 0.06);
+      ctx.strokeStyle = '#e84a4a';
+      ctx.lineWidth = 0.12;
+      ctx.beginPath();
+      ctx.arc(0, 0.1, 0.28, 0, Math.PI * 1.6);
+      ctx.stroke();
       break;
   }
   ctx.restore();
 }
 
+export interface BuildingStyle {
+  label: string;
+  icon: IconKind;
+  sign: string;
+  ink: string;
+}
+
 /**
- * Facciate dei palazzi sopra il marciapiede d'arrivo. y cresce verso il basso,
- * y = FACADE_ROWS è il filo del marciapiede.
+ * Un palazzo della piazza, visto di fronte. y cresce verso il basso, y = BUILDING_HEIGHT
+ * è il filo della piazza. `door` è la x della porta.
  */
-function paintFacade(ctx: Ctx, sp: Span, dest: Destination, label: string, seed: number) {
-  const base = FACADE_ROWS;
-  // cielo
-  const g = ctx.createLinearGradient(0, 0, 0, base);
-  g.addColorStop(0, '#6ec3f0');
-  g.addColorStop(1, '#bfe8fb');
-  ctx.fillStyle = g;
-  ctx.fillRect(sp.x0, 0, sp.x1 - sp.x0, base);
-  // nuvolette
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (let i = 0; i < 4; i++) {
-    const cx = sp.x0 + hash(seed, i, 1) * (sp.x1 - sp.x0);
-    const cy = 0.4 + hash(seed, i, 2) * 1.2;
-    circle(ctx, cx, cy, 0.3);
-    ctx.fill();
-    circle(ctx, cx + 0.3, cy + 0.05, 0.22);
-    ctx.fill();
-    circle(ctx, cx - 0.3, cy + 0.08, 0.2);
-    ctx.fill();
-  }
-
-  const shopL = COLS / 2 - 2;
-  const shopR = COLS / 2 + 2;
-  // palazzi a sinistra e a destra (anche oltre i bordi, per gli schermi larghi)
-  const blocks: { x0: number; x1: number; h: number; wall: string }[] = [];
-  let k = 0;
-  for (let x = shopL; x > sp.x0 - 4; k++) {
-    const w = 2.5 + hash(seed, k, 9) * 1.2;
-    blocks.push({ x0: x - w, x1: x, h: 5 + hash(seed, k, 3) * 1.6, wall: WALLS[(seed + k) % WALLS.length] });
-    x -= w;
-  }
-  for (let x = shopR; x < sp.x1 + 4; k++) {
-    const w = 2.5 + hash(seed, k, 9) * 1.2;
-    blocks.push({ x0: x, x1: x + w, h: 4.8 + hash(seed, k, 3) * 1.6, wall: WALLS[(seed + k) % WALLS.length] });
-    x += w;
-  }
-  for (const b of blocks) {
-    const top = base - b.h;
-    ctx.fillStyle = b.wall;
-    ctx.fillRect(b.x0, top, b.x1 - b.x0, b.h);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 0.03;
-    ctx.strokeRect(b.x0, top, b.x1 - b.x0, b.h);
-    // cornicione
-    ctx.fillStyle = shade(b.wall, -0.15);
-    ctx.fillRect(b.x0 - 0.05, top, b.x1 - b.x0 + 0.1, 0.18);
-    // tegole
-    ctx.fillStyle = '#c8664a';
-    ctx.fillRect(b.x0 - 0.05, top - 0.22, b.x1 - b.x0 + 0.1, 0.22);
-    ctx.fillStyle = '#b55a40';
-    for (let x = b.x0; x < b.x1; x += 0.22) ctx.fillRect(x, top - 0.22, 0.04, 0.22);
-    // piani con finestre
-    const cols = Math.max(1, Math.floor((b.x1 - b.x0) / 1.2));
-    const pitch = (b.x1 - b.x0) / cols;
-    for (let fy = top + 0.55; fy < base - 2.4; fy += 1.45) {
-      for (let c = 0; c < cols; c++) {
-        const wx = b.x0 + pitch * c + pitch / 2 - 0.22;
-        const hv = hash(Math.round(wx * 10), Math.round(fy * 10), seed);
-        window2(ctx, wx, fy, 0.44, 0.7, hv < 0.3, hv > 0.55);
-      }
-    }
-    // piano terra: portone
-    const dx = (b.x0 + b.x1) / 2;
-    rr(ctx, dx - 0.35, base - 1.35, 0.7, 1.35, 0.3);
-    fillInk(ctx, '#7a4b2a');
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.moveTo(dx, base - 1.2);
-    ctx.lineTo(dx, base);
-    ctx.stroke();
-    // zoccolo
-    ctx.fillStyle = shade(b.wall, -0.2);
-    ctx.fillRect(b.x0, base - 0.25, b.x1 - b.x0, 0.25);
-  }
-  // panni stesi tra due finestre: un tocco di quartiere
-  const lineY = base - 3.4;
-  ctx.strokeStyle = '#6b6b7a';
-  ctx.lineWidth = 0.02;
-  ctx.beginPath();
-  ctx.moveTo(shopL - 2.2, lineY);
-  ctx.quadraticCurveTo(shopL - 1.1, lineY + 0.2, shopL - 0.1, lineY);
-  ctx.stroke();
-  for (const [i, c] of (['#f28bb6', '#ffffff', '#5aa9f0', '#f7c948'] as const).entries()) {
-    const cx = shopL - 1.9 + i * 0.45;
-    rr(ctx, cx, lineY + 0.05, 0.3, 0.38, 0.04);
-    fillInk(ctx, c, 0.02);
-  }
-
-  // il negozio di destinazione
-  const style = DEST_STYLE[dest];
-  const top = base - 6.2;
-  ctx.fillStyle = '#f7ead6';
-  ctx.fillRect(shopL, top, shopR - shopL, 6.2);
+function paintBuilding(ctx: Ctx, x0: number, x1: number, door: number, st: BuildingStyle, wall: string, seed: number) {
+  const H = BUILDING_HEIGHT;
+  // tetto e cornicione
+  ctx.fillStyle = '#c8664a';
+  ctx.fillRect(x0 - 0.05, -0.26, x1 - x0 + 0.1, 0.26);
+  ctx.fillStyle = '#b55a40';
+  for (let x = x0; x < x1; x += 0.22) ctx.fillRect(x, -0.26, 0.04, 0.26);
+  ctx.fillStyle = wall;
+  ctx.fillRect(x0, 0, x1 - x0, H);
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.03;
-  ctx.strokeRect(shopL, top, shopR - shopL, 6.2);
-  ctx.fillStyle = '#e3d3b8';
-  ctx.fillRect(shopL - 0.05, top, shopR - shopL + 0.1, 0.18);
-  ctx.fillStyle = '#c8664a';
-  ctx.fillRect(shopL - 0.05, top - 0.22, shopR - shopL + 0.1, 0.22);
-  for (let fy = top + 0.6; fy < base - 2.6; fy += 1.45) {
-    for (let c = 0; c < 3; c++) window2(ctx, shopL + 0.45 + c * 1.2, fy, 0.44, 0.7, false, c === 1);
+  ctx.strokeRect(x0, 0, x1 - x0, H);
+  ctx.fillStyle = shade(wall, -0.15);
+  ctx.fillRect(x0 - 0.05, 0, x1 - x0 + 0.1, 0.14);
+  // finestre del primo piano
+  const n = Math.max(1, Math.floor((x1 - x0) / 1.1));
+  const pitch = (x1 - x0) / n;
+  for (let c = 0; c < n; c++) {
+    const wx = x0 + pitch * c + pitch / 2 - 0.2;
+    window2(ctx, wx, 0.28, 0.4, 0.58, hash(seed, c, 3) < 0.3, hash(seed, c, 4) > 0.5);
   }
   // insegna
-  rr(ctx, shopL + 0.15, base - 2.55, shopR - shopL - 0.3, 0.62, 0.1);
-  fillInk(ctx, style.sign);
-  cellText(ctx, label, COLS / 2, base - 2.22, 0.36, 700, style.color, shopR - shopL - 1.5);
-  destIcon(ctx, dest, shopL + 0.55, base - 2.24, 0.2);
-  destIcon(ctx, dest, shopR - 0.55, base - 2.24, 0.2);
+  rr(ctx, x0 + 0.12, 1.02, x1 - x0 - 0.24, 0.44, 0.08);
+  fillInk(ctx, st.sign);
+  cellText(ctx, st.label, (x0 + x1) / 2, 1.245, 0.26, 700, st.ink, x1 - x0 - 0.8);
+  destIcon(ctx, st.icon, x0 + 0.34, 1.24, 0.13);
+  destIcon(ctx, st.icon, x1 - 0.34, 1.24, 0.13);
   // tenda a strisce
-  const awTop = base - 1.85;
-  for (let i = 0; i < 8; i++) {
-    const x0 = shopL + 0.1 + (i * (shopR - shopL - 0.2)) / 8;
-    const x1 = shopL + 0.1 + ((i + 1) * (shopR - shopL - 0.2)) / 8;
+  const aw = 1.52;
+  const stripes = 6;
+  for (let i = 0; i < stripes; i++) {
+    const a = x0 + 0.08 + (i * (x1 - x0 - 0.16)) / stripes;
+    const b = x0 + 0.08 + ((i + 1) * (x1 - x0 - 0.16)) / stripes;
     ctx.beginPath();
-    ctx.moveTo(x0, awTop);
-    ctx.lineTo(x1, awTop);
-    ctx.lineTo(x1, awTop + 0.35);
-    ctx.quadraticCurveTo((x0 + x1) / 2, awTop + 0.5, x0, awTop + 0.35);
+    ctx.moveTo(a, aw);
+    ctx.lineTo(b, aw);
+    ctx.lineTo(b, aw + 0.26);
+    ctx.quadraticCurveTo((a + b) / 2, aw + 0.38, a, aw + 0.26);
     ctx.closePath();
-    ctx.fillStyle = i % 2 ? '#ffffff' : style.sign;
+    ctx.fillStyle = i % 2 ? '#ffffff' : st.sign;
     ctx.fill();
   }
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.03;
-  ctx.strokeRect(shopL + 0.1, awTop, shopR - shopL - 0.2, 0.35);
-  // vetrine e porta
-  for (const vx of [shopL + 0.3, shopR - 1.55]) {
-    rr(ctx, vx, base - 1.35, 1.25, 1.1, 0.06);
-    fillInk(ctx, '#bfe6ff');
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillRect(vx + 0.15, base - 1.25, 0.12, 0.8);
-    destIcon(ctx, dest, vx + 0.75, base - 0.75, 0.22);
-  }
-  rr(ctx, COLS / 2 - 0.4, base - 1.45, 0.8, 1.45, 0.08);
+  ctx.lineWidth = 0.025;
+  ctx.strokeRect(x0 + 0.08, aw, x1 - x0 - 0.16, 0.26);
+  // vetrina e porta
+  const vx = door < (x0 + x1) / 2 ? door + 0.45 : x0 + 0.2;
+  const vw = Math.min(1.1, x1 - x0 - 1.2);
+  rr(ctx, vx, H - 0.72, vw, 0.56, 0.05);
+  fillInk(ctx, '#bfe6ff');
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(vx + 0.1, H - 0.66, 0.08, 0.42);
+  destIcon(ctx, st.icon, vx + vw / 2, H - 0.44, 0.16);
+  rr(ctx, door - 0.3, H - 0.95, 0.6, 0.95, 0.06);
   fillInk(ctx, '#7a4b2a');
-  rr(ctx, COLS / 2 - 0.3, base - 1.35, 0.6, 0.8, 0.05);
-  fillInk(ctx, '#bfe6ff', 0.025);
-  circle(ctx, COLS / 2 + 0.22, base - 0.6, 0.04);
-  fillInk(ctx, '#f7c948', 0.02);
-  ctx.fillStyle = shade('#f7ead6', -0.2);
-  ctx.fillRect(shopL, base - 0.2, shopR - shopL, 0.2);
+  rr(ctx, door - 0.22, H - 0.87, 0.44, 0.45, 0.04);
+  fillInk(ctx, '#bfe6ff', 0.02);
+  circle(ctx, door + 0.17, H - 0.35, 0.03);
+  fillInk(ctx, '#f7c948', 0.015);
+  ctx.fillStyle = shade(wall, -0.2);
+  ctx.fillRect(x0, H - 0.14, x1 - x0, 0.14);
 }
 
 /** Tetti di coppi sotto il marciapiede di partenza: il quartiere della nonna. y cresce verso il basso da 0. */
@@ -644,31 +563,39 @@ function paintRoofs(ctx: Ctx, sp: Span, rowsDown: number, seed: number) {
   ctx.stroke();
 }
 
+/** Quante fette sono state disegnate e quanto tempo ci è voluto (per le misure di fluidità). */
+export const bgStats = { chunks: 0, ms: 0 };
+
 interface Chunk {
   y0: number;
   canvas: HTMLCanvasElement;
 }
 
+export interface StopStyle {
+  left: BuildingStyle;
+  right: BuildingStyle;
+}
+
+/**
+ * Sfondo della strada infinita: le fette si disegnano quando stanno per entrare
+ * in scena e si buttano quando sono rimaste indietro.
+ */
 export class Background {
-  private chunks: Chunk[] = [];
+  private chunks = new Map<number, Chunk>();
 
   constructor(
-    private readonly level: LevelDef,
+    private readonly world: World,
     /** pixel per cella (già moltiplicati per il devicePixelRatio) */
     private readonly s: number,
     private readonly xLeft: number,
     private readonly xRight: number,
-    yMin: number,
-    yMax: number,
-    private readonly label: string,
-  ) {
-    const start = Math.floor(yMin / CHUNK_ROWS) * CHUNK_ROWS;
-    for (let y0 = start; y0 < yMax; y0 += CHUNK_ROWS) this.chunks.push({ y0, canvas: this.paintChunk(y0) });
-  }
+    private readonly styleOf: (stop: Stop) => StopStyle,
+  ) {}
+
+  private rowAt = (i: number): RowDef | undefined => (i < 0 ? undefined : this.world.row(i));
 
   private paintChunk(y0: number): HTMLCanvasElement {
     const s = this.s;
-    const rows = this.level.rows;
     const canvas = makeCanvas((this.xRight - this.xLeft) * s, CHUNK_ROWS * s);
     const ctx = ctx2d(canvas);
     ctx.lineJoin = 'round';
@@ -676,53 +603,76 @@ export class Background {
     const top = y0 + CHUNK_ROWS;
     const sp: Span = { x0: this.xLeft - 0.5, x1: this.xRight + 0.5 };
     const rowTransform = (r: number) => ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - (r + 1)) * s);
-    const r0 = Math.max(0, Math.floor(y0) - 1);
-    const r1 = Math.min(rows.length - 1, Math.ceil(top) + 1);
-    for (let r = r0; r <= r1; r++) {
-      rowTransform(r);
-      paintRowBase(ctx, rows[r], r, sp);
-    }
-    for (let r = r0; r <= r1; r++) {
-      rowTransform(r);
-      paintRowMarks(ctx, rows, r, sp);
-    }
-    const seed = this.level.n * 31 + 7;
-    // facciate sopra l'arrivo
-    const facadeTop = rows.length + FACADE_ROWS;
-    if (top > rows.length) {
-      ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - facadeTop) * s);
-      paintFacade(ctx, sp, this.level.destination, this.label, seed);
-      if (top > facadeTop) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = '#6ec3f0';
-        ctx.fillRect(0, 0, canvas.width, (top - facadeTop) * s + 1);
+    const r0 = Math.max(0, y0 - 1);
+    const r1 = top + 1;
+    if (r1 >= 0) {
+      for (let r = r0; r <= r1; r++) {
+        rowTransform(r);
+        paintRowBase(ctx, this.rowAt(r)!, r, sp);
       }
+      for (let r = r0; r <= r1; r++) {
+        rowTransform(r);
+        paintRowMarks(ctx, this.rowAt, r, sp);
+      }
+    }
+    // palazzi delle piazze (possono sporgere nelle fette vicine)
+    for (const stop of this.world.stops) {
+      const base = stop.entry + 1;
+      if (base > top + 0.5 || base + BUILDING_HEIGHT + 0.3 < y0) continue;
+      const st = this.styleOf(stop);
+      ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - (base + BUILDING_HEIGHT)) * s);
+      const seed = stop.entry * 13 + 5;
+      paintBuilding(ctx, Math.min(-0.2, this.xLeft - 0.5), 3, 2.35, st.left, WALLS[stop.entry % WALLS.length], seed);
+      paintBuilding(ctx, 6, Math.max(9.2, this.xRight + 0.5), 6.65, st.right, WALLS[(stop.entry + 3) % WALLS.length], seed + 1);
     }
     // tetti sotto la partenza
     if (y0 < 0) {
       ctx.setTransform(s, 0, 0, s, -this.xLeft * s, top * s);
-      paintRoofs(ctx, sp, -y0 + 1, seed);
+      paintRoofs(ctx, sp, -y0 + 1, 7);
     }
     return canvas;
+  }
+
+  private ensureChunk(y0: number) {
+    let ch = this.chunks.get(y0);
+    if (!ch) {
+      const t0 = performance.now();
+      ch = { y0, canvas: this.paintChunk(y0) };
+      bgStats.chunks++;
+      bgStats.ms += performance.now() - t0;
+      this.chunks.set(y0, ch);
+    }
+    return ch;
   }
 
   /** Disegna le fette visibili. `yBottom` è la y del mondo al bordo inferiore, `screenH` in pixel. */
   draw(ctx: Ctx, yBottom: number, screenH: number) {
     const s = this.s;
     const yTop = yBottom + screenH / s;
-    for (const ch of this.chunks) {
-      if (ch.y0 + CHUNK_ROWS < yBottom || ch.y0 > yTop) continue;
-      const dy = Math.round(screenH - (ch.y0 + CHUNK_ROWS - yBottom) * s);
+    const first = Math.floor(yBottom / CHUNK_ROWS) * CHUNK_ROWS;
+    for (let y0 = first; y0 < yTop; y0 += CHUNK_ROWS) {
+      const ch = this.ensureChunk(y0);
+      const dy = Math.round(screenH - (y0 + CHUNK_ROWS - yBottom) * s);
       ctx.drawImage(ch.canvas, 0, dy);
+    }
+    // si prepara in anticipo la fetta successiva, e si libera la memoria di quelle passate
+    const ahead = Math.floor(yTop / CHUNK_ROWS) * CHUNK_ROWS + CHUNK_ROWS;
+    if (!this.chunks.has(ahead)) this.ensureChunk(ahead);
+    for (const [y0, ch] of this.chunks) {
+      if (y0 + CHUNK_ROWS < yBottom - CHUNK_ROWS * 2 || y0 > ahead + CHUNK_ROWS) {
+        ch.canvas.width = 0;
+        ch.canvas.height = 0;
+        this.chunks.delete(y0);
+      }
     }
   }
 
   dispose() {
     // Su iOS la memoria dei canvas si libera prima azzerandone le dimensioni.
-    for (const ch of this.chunks) {
+    for (const ch of this.chunks.values()) {
       ch.canvas.width = 0;
       ch.canvas.height = 0;
     }
-    this.chunks = [];
+    this.chunks.clear();
   }
 }

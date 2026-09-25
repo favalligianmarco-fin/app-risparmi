@@ -1,4 +1,5 @@
-import type { PickupKind, PropKind } from '../levels';
+import type { PickupKind, PropKind } from '../world';
+import { drawSlipper } from './characters';
 import { INK, circle, ctx2d, ellipse, fillInk, makeCanvas, rr } from './paint';
 import type { Ctx } from './paint';
 import type { Sprite } from './vehicles';
@@ -198,25 +199,23 @@ export function paintPickup(ctx: Ctx, kind: PickupKind) {
     ctx.moveTo(0.05, -0.2);
     ctx.quadraticCurveTo(0, -0.3, 0.06, -0.4);
     ctx.stroke();
+  } else if (kind === 'slipper') {
+    // ciabatta di scorta
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    circle(ctx, 0, -0.1, 0.24);
+    ctx.fill();
+    drawSlipper(ctx, 0.02, 0.06, -0.5, 1.15);
   } else {
-    // ombrello di scorta
-    ctx.save();
-    ctx.rotate(-0.5);
+    // un cuore in più
     ctx.beginPath();
-    ctx.moveTo(-0.07, -0.04);
-    ctx.lineTo(0.07, -0.04);
-    ctx.lineTo(0.02, -0.34);
-    ctx.lineTo(-0.02, -0.34);
+    ctx.moveTo(0, 0.14);
+    ctx.bezierCurveTo(-0.3, -0.06, -0.2, -0.3, 0, -0.16);
+    ctx.bezierCurveTo(0.2, -0.3, 0.3, -0.06, 0, 0.14);
     ctx.closePath();
-    fillInk(ctx, '#e84a4a', 0.028);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 0.035;
-    ctx.beginPath();
-    ctx.moveTo(0, -0.04);
-    ctx.lineTo(0, 0.14);
-    ctx.arc(0.05, 0.14, 0.05, Math.PI, 0, true);
-    ctx.stroke();
-    ctx.restore();
+    fillInk(ctx, '#e84a4a');
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ellipse(ctx, -0.09, -0.12, 0.05, 0.03, -0.5);
+    ctx.fill();
   }
 }
 

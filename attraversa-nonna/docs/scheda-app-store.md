@@ -7,33 +7,39 @@ caratteri usati.
 
 **Nome** (max 30): `Attraversa, Nonna!` (18)
 
-**Sottotitolo** (max 30): `Accompagnala sana e salva` (25)
+**Sottotitolo** (max 30): `Accompagnala più lontano` (24)
 
 **Testo promozionale** (max 170, modificabile senza nuova revisione):
 
-> Tocca, scorri, apri l'ombrello: la nonna deve arrivare in farmacia, al mercato e in gelateria. Senza pubblicità, senza internet, senza raccogliere dati. (152)
+> Più lontano porti la nonna, più la strada si fa tosta. Alza la ciabatta, scappa dal temporale e salta la fila alla posta. Senza pubblicità né dati raccolti. (156)
 
 **Descrizione** (max 4000):
 
-> La nonna ha mille commissioni: la farmacia, il fornaio, il mercato, la posta, la partita a bocce. C'è solo un problema: la strada in mezzo.
->
-> Prendila per mano e portala dall'altra parte, corsia dopo corsia, tra utilitarie, scooter, furgoni, autobus, biciclette e tram.
+> La nonna deve attraversare. E poi un'altra strada. E un'altra ancora. Prendila per mano e portala più lontano che puoi, metro dopo metro, tra utilitarie, scooter, autobus, biciclette e tram.
 >
 > COME SI GIOCA
 > • Tocca per fare un passo avanti, scorri per spostarti di lato.
-> • Apri l'ombrello della nonna: le auto vicine si fermano di colpo.
+> • Più vai lontano, più il traffico corre e gli spazi si stringono.
+> • Alza la ciabatta della nonna: chi la vede inchioda.
 > • Il tram non si ferma per nessuno: quando il semaforo lampeggia, aspetta.
-> • Raccogli caramelle, bevi un caffè per andare più veloce, trova ombrelli di scorta.
-> • Ogni livello vale tre stelle: arrivare, arrivare senza spaventi, arrivare in tempo.
+> • Da dietro arriva il temporale: non si può restare fermi troppo a lungo.
+> • Raccogli caramelle, bevi un caffè per andare più veloce, trova ciabatte di scorta.
+>
+> LE SOSTE
+> Ogni tanto la nonna ha una commissione, e tocca a te aiutarla, di corsa:
+> • il tiramisù della nonna, con gli ingredienti nell'ordine giusto;
+> • la pensione alla posta, saltando la fila senza farsi vedere;
+> • l'ago da infilare, perché la nonna non ci vede più;
+> • il pranzo della domenica: "Mangia, che sei sciupato!".
+>
+> LE NONNE D'ITALIA
+> Venti nonne, una per regione, ognuna col suo vestito e il suo modo di mandare a quel paese chi guida male. Si parte con la napoletana, la calabrese e la veneta; le altre si sbloccano con le caramelle.
 >
 > NESSUNO SI FA MALE
-> Le auto inchiodano sempre in tempo. Al massimo la nonna si spaventa, agita l'ombrello e grida "Mascalzone!". Dopo tre spaventi, per oggi si torna a casa.
->
-> IL GUARDAROBA DELLA NONNA
-> Con le caramelle raccolte sblocchi i suoi vestiti: la Domenica col cappello di paglia, la Sportiva, la Diva con occhiali da sole e perle, la Rock, la Montanara e la Regina.
+> Le auto inchiodano sempre in tempo. Al massimo la nonna si spaventa e ne dice di tutti i colori. Dopo tre spaventi si torna a casa.
 >
 > FATTO BENE
-> • Livelli sempre nuovi, con difficoltà che cresce piano piano.
+> • Strada infinita, sempre diversa.
 > • Animazioni fluide e musica da fisarmonica.
 > • Funziona offline, senza pubblicità e senza acquisti.
 > • Nessun account e nessun dato raccolto.
@@ -41,9 +47,9 @@ caratteri usati.
 **Parole chiave** (max 100, separate da virgole, senza spazi):
 
 ```
-nonna,strada,attraversare,traffico,auto,tram,bici,ombrello,scout,arcade,casual,famiglia,italia
+nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,italia,regioni
 ```
-(94)
+(93)
 
 **URL di supporto**: l'indirizzo dove pubblichi `docs/privacy.html` (contiene il contatto)
 
@@ -61,29 +67,35 @@ nonna,strada,attraversare,traffico,auto,tram,bici,ombrello,scout,arcade,casual,f
 
 **Promotional text**:
 
-> Tap, swipe, open the umbrella: Nonna has errands to run at the pharmacy, the market and the gelato shop. No ads, no internet, no data collected. (144)
+> The further you take Nonna, the tougher the road. Raise the slipper, outrun the storm and skip the post office queue. No ads, no data collected. (144)
 
 **Description**:
 
-> Nonna has errands to run: the pharmacy, the bakery, the market, the post office, her bocce game. There's just one problem: the road in between.
->
-> Take her by the hand and lead her across, lane by lane, past little cars, scooters, vans, buses, bikes and trams.
+> Nonna needs to cross. And then another road. And another. Take her by the hand and lead her as far as you can, meter after meter, past little cars, scooters, buses, bikes and trams.
 >
 > HOW TO PLAY
 > • Tap to step forward, swipe to move sideways.
-> • Open Nonna's umbrella: nearby cars stop dead.
+> • The further you go, the faster the traffic and the tighter the gaps.
+> • Raise Nonna's slipper: whoever sees it slams the brakes.
 > • The tram stops for nobody: when the signal flashes, wait.
-> • Collect candies, grab an espresso to walk faster, find spare umbrellas.
-> • Every level is worth three stars: get there, get there with no scares, get there in time.
+> • A storm is coming from behind: you can't stand still for long.
+> • Collect candies, grab an espresso to walk faster, find spare slippers.
+>
+> STOPS
+> Every so often Nonna has an errand to run, and you have to help her, fast:
+> • Nonna's tiramisù, with the ingredients in the right order;
+> • her pension at the post office, skipping the queue without being seen;
+> • threading the needle, because Nonna can't see a thing;
+> • Sunday lunch: "Eat, you're too skinny!".
+>
+> THE NONNAS OF ITALY
+> Twenty nonnas, one for each region, each with her own outfit and her own way of telling bad drivers where to go, in her own dialect. Start with Naples, Calabria and Veneto; unlock the others with candies.
 >
 > NOBODY GETS HURT
-> Cars always brake in time. At worst Nonna gets a fright, shakes her umbrella and shouts "You rascal!". After three scares, she heads home for the day.
->
-> NONNA'S WARDROBE
-> Spend your candies on new outfits: Sunday best with a straw hat, Sporty, Diva with sunglasses and pearls, Rock, Alpine and Queen.
+> Cars always brake in time. At worst Nonna gets a fright and gives them a piece of her mind. After three scares, she heads home.
 >
 > MADE WITH CARE
-> • Endless levels with a gentle difficulty curve.
+> • Endless road, different every time.
 > • Smooth animation and accordion music.
 > • Works offline, with no ads and no purchases.
 > • No account and no data collected.
@@ -91,34 +103,33 @@ nonna,strada,attraversare,traffico,auto,tram,bici,ombrello,scout,arcade,casual,f
 **Keywords**:
 
 ```
-grandma,road,cross,street,traffic,cars,tram,bike,umbrella,scout,arcade,casual,family,italy
+grandma,road,crossing,traffic,endless,slipper,minigames,tram,arcade,casual,italy,italian
 ```
-(90)
+(88)
 
 ## Note per la revisione (App Review Information → Notes)
 
-> Attraversa, Nonna! is a complete offline arcade game built with Capacitor. All game code, graphics (drawn procedurally) and music (synthesized with Web Audio) are bundled in the app; it never connects to the internet. Native features: haptic feedback and native storage for progress. No login is required. Controls: tap to step forward, swipe to move sideways, tap the red umbrella button to stop nearby traffic. The app collects no data and contains no ads or purchases.
+> Attraversa, Nonna! is a complete offline endless arcade game built with Capacitor. All game code, graphics (drawn procedurally) and music (synthesized with Web Audio) are bundled in the app; it never connects to the internet. Native features: haptic feedback and native storage for progress. No login is required. Controls: tap to step forward, swipe to move sideways, tap the yellow slipper button to make nearby cars stop. About every 150 meters there is a timed minigame. The grandmas shout mild Italian dialect insults at reckless drivers (declared as frequent mild profanity/crude humor, 13+). No vehicle ever touches the characters. The app collects no data and contains no ads or purchases.
 
 Non serve un account demo: non c'è login.
 
 ## Classificazione per età: risposte al questionario
 
-Rispondi **No / Nessuno** a tutto, in particolare:
-
 | Domanda | Risposta | Perché |
 |---|---|---|
-| Violenza (realistica, cartoon o fantasy) | Nessuna | Nessun contatto tra veicoli e personaggi: le auto frenano sempre prima |
-| Temi horror o paura | Nessuno | |
-| Linguaggio volgare o umorismo crudo | Nessuno | "Mascalzone!" è l'insulto più forte |
-| Alcol, tabacco, droghe; contenuti sessuali; gioco d'azzardo | Nessuno | Il caffè è un espresso |
-| Temi medici o di benessere | No | La farmacia è solo una destinazione |
+| Profanity or Crude Humor | **Frequente** | Le nonne dicono parolacce leggere in dialetto a ogni frenata |
+| Violenza (realistica, cartoon o fantasy) | Nessuna | Nessun contatto tra veicoli e personaggi: le auto frenano sempre prima, la ciabatta non colpisce nessuno |
+| Temi horror o paura | Nessuno | Il temporale è un nuvolone con la pioggia |
+| Temi maturi o allusivi, contenuti sessuali | Nessuno | |
+| Alcol, tabacco, droghe | Nessuno | Il caffè è un espresso |
+| Gioco d'azzardo, concorsi, loot box | No | |
+| Temi medici o di benessere | No | |
 | Contenuti generati dagli utenti, chat, messaggi | No | |
 | Capacità di social media (domande da settembre 2026) | No | Niente feed, profili o contenuti condivisi |
 | Accesso libero al web | No | L'app non si collega a internet |
 | Pubblicità, acquisti in-app | No | |
-| Controlli parentali / verifica dell'età | Nessuno necessario | |
 
-Risultato atteso: **4+**.
+Risultato atteso: **13+**. Senza le parole più crude (vedi guida) si scende a 9+.
 
 ## Privacy dell'app (etichetta "nutrizionale")
 
@@ -131,10 +142,10 @@ Sezione **iPhone 6,9"**: carica in quest'ordine i file di
 `docs/screenshots/it` (per l'italiano) e `docs/screenshots/en` (per l'inglese):
 
 1. `1-titolo.jpg`
-2. `2-ombrello.jpg`
-3. `3-tram.jpg`
-4. `4-bici.jpg`
-5. `5-vittoria.jpg`
-6. `6-guardaroba.jpg`
+2. `2-ciabatta.jpg`
+3. `3-posta.jpg`
+4. `4-tram.jpg`
+5. `5-temporale.jpg`
+6. `6-nonne.jpg`
 
 Se cambi la grafica, rigenerali con `npm run screenshots`.

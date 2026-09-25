@@ -1,19 +1,15 @@
-import { generateLevel } from '../src/levels';
 import { Sim } from '../src/sim';
 import { runBot } from '../tests/bot';
 
-const upTo = Number(process.argv[2] ?? 40);
-let wins = 0;
-for (let n = 1; n <= upTo; n++) {
-  const lv = generateLevel(n);
-  const results = [0, 1, 2].map((k) => runBot(new Sim(lv, lv.seed + k * 7919)));
-  const w = results.filter((r) => r.won).length;
-  wins += w;
-  const times = results.filter((r) => r.won).map((r) => r.time.toFixed(1));
-  const hits = results.map((r) => r.hits).join('/');
-  const kinds = lv.rows.map((r) => r.kind[0]).join('');
-  console.log(
-    `L${String(n).padStart(2)} rows=${String(lv.rows.length).padStart(2)} ${kinds.padEnd(26)} par=${String(lv.parTime).padStart(3)} won=${w}/3 t=[${times.join(', ')}] hits=${hits} umb=${results.map((r) => r.umbrellasUsed).join('/')}`,
-  );
+// Il bot corre su più semi: quanti metri fa, perché si ferma, quante soste completa.
+const runs = Number(process.argv[2] ?? 12);
+const target = Number(process.argv[3] ?? 2000);
+const results = [];
+for (let k = 0; k < runs; k++) {
+  const seed = 1000 + k * 7919;
+  const r = runBot(new Sim(seed), target, 1500);
+  results.push(r);
+  console.log(`seme ${seed}: ${String(r.meters).padStart(5)} m in ${r.time.toFixed(0).padStart(4)} s  spaventi=${r.hits} ciabatte=${r.slippersUsed} soste=${r.stops} fine=${r.cause ?? 'traguardo'}`);
 }
-console.log(`wins ${wins}/${upTo * 3}`);
+const m = results.map((r) => r.meters).sort((a, b) => a - b);
+console.log(`metri: min ${m[0]}, mediana ${m[Math.floor(m.length / 2)]}, max ${m[m.length - 1]}`);
