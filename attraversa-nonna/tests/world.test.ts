@@ -42,7 +42,7 @@ describe('strada infinita', () => {
     w.ensure(1200);
     const rails = w.rows.filter((r) => r.kind === 'rail');
     expect(rails.length).toBeGreaterThan(3);
-    expect(w.rows.findIndex((r) => r.kind === 'rail')).toBeGreaterThan(150);
+    expect(w.rows.findIndex((r) => r.kind === 'rail')).toBeGreaterThan(130);
     expect(rails.some((r) => r.mix.includes('fast'))).toBe(true);
   });
 

@@ -50,8 +50,15 @@ const it = {
     coffee: 'Caffè!',
     extraSlipper: '+1 ciabatta',
     extraHeart: '+1 cuore',
-    storm: 'Arriva il temporale!',
   },
+  /** Cosa dice la nonna quando il temporale le arriva addosso. */
+  stormLines: [
+    'Sbrighiamoci, che piove!',
+    'Cammina, che mi si rovina la permanente!',
+    'Ho steso i panni, corri!',
+    'Avanti, che qui ci bagniamo!',
+    "Non ho preso l'ombrello, muoviti!",
+  ],
   stops: {
     tiramisu: 'CASA DELLA NONNA',
     poste: 'POSTA',
@@ -172,8 +179,14 @@ const en: Strings = {
     coffee: 'Espresso!',
     extraSlipper: '+1 slipper',
     extraHeart: '+1 heart',
-    storm: 'Storm coming!',
   },
+  stormLines: [
+    "Hurry, it's going to pour!",
+    'Walk faster, my perm will be ruined!',
+    'My laundry is out, run!',
+    "Come on, we'll get soaked!",
+    'I forgot my umbrella, move it!',
+  ],
   stops: {
     tiramisu: 'NONNA’S HOUSE',
     poste: 'POST OFFICE',

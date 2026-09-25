@@ -9,8 +9,6 @@ import type { Ctx } from './paint';
  */
 
 const CHUNK_ROWS = 6;
-/** Altezza delle facciate dei palazzi nelle piazze, in righe. */
-export const BUILDING_HEIGHT = 3.5;
 
 function hash(a: number, b: number, c = 0): number {
   let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647);
@@ -438,28 +436,46 @@ const THEMES: Record<Theme, { wall: string; sign: string; ink: string; awning: s
   trattoria: { wall: '#e8a07e', sign: '#2f7a45', ink: '#fff4dc', awning: ['#3fae5a', '#ffffff', '#e84a4a'], icon: 'trattoria', shutter: '#2f7a45' },
 };
 
-/** Finestra con persiane del colore del palazzo, tenda di pizzo e, a volte, gerani. */
+// ------------------------------------------------------------ palazzi in rilievo
+// Stessa vista dei mezzi: la facciata si vede di fronte e tutto ciò che sporge
+// (cornicione, davanzali, balcone, tende, gradino) mostra la faccia di sopra e
+// getta un'ombra in basso a destra. Sopra la facciata il tetto sale fino al colmo.
+
+/** Pietra chiara di davanzali, soglie e cornici. */
+const STONE_LEDGE = '#e6dccb';
+/** Ombra portata, sempre dello stesso colore. */
+const SHADOW = 'rgba(40,30,60,0.2)';
+
+/** Ombra sfumata dall'alto verso il basso (sotto cornicioni, balconi, tende). */
+function softShadow(ctx: Ctx, x: number, y: number, w: number, h: number, a = 0.22) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, `rgba(40,30,60,${a})`);
+  g.addColorStop(1, 'rgba(40,30,60,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+}
+
+/** Lastra che sporge dal muro (colore esadecimale): faccia di sopra chiara, spessore più scuro, ombra sotto. */
+function ledge(ctx: Ctx, x: number, y: number, w: number, depth: number, thick: number, color: string, shadowH = 0.12) {
+  softShadow(ctx, x + 0.04, y + depth + thick, w, shadowH, 0.3);
+  ctx.fillStyle = shade(color, 0.35);
+  ctx.fillRect(x, y, w, depth);
+  ctx.fillStyle = shade(color, -0.08);
+  ctx.fillRect(x, y + depth, w, thick);
+  ctx.strokeStyle = 'rgba(45,42,62,0.6)';
+  ctx.lineWidth = 0.014;
+  ctx.strokeRect(x, y, w, depth + thick);
+}
+
+/** Finestra incassata nel muro: cornice di pietra, persiane, davanzale e a volte i gerani. */
 function palWindow(ctx: Ctx, x: number, y: number, w: number, h: number, shutter: string, lace: boolean, flowers: boolean) {
-  rr(ctx, x - 0.05, y - 0.05, w + 0.1, h + 0.1, 0.03);
-  fillInk(ctx, '#f7efe2', 0.025);
-  rr(ctx, x, y, w, h, 0.02);
-  fillInk(ctx, '#9fc8e6', 0.02);
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.fillRect(x + w * 0.15, y + h * 0.1, w * 0.1, h * 0.55);
-  if (lace) {
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + h * 0.28);
-    for (let k = 4; k >= 0; k--) ctx.quadraticCurveTo(x + (w * (k + 0.5)) / 5, y + h * 0.4, x + (w * k) / 5, y + h * 0.28);
-    ctx.closePath();
-    ctx.fill();
-  }
-  for (const sx of [x - w * 0.52, x + w + 0.02]) {
+  // persiane aperte contro il muro, con la loro ombra
+  for (const sx of [x - w * 0.52 - 0.06, x + w + 0.08]) {
+    ctx.fillStyle = SHADOW;
+    ctx.fillRect(sx + 0.035, y + 0.04, w * 0.5, h);
     rr(ctx, sx, y, w * 0.5, h, 0.02);
     fillInk(ctx, shutter, 0.02);
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 0.014;
     ctx.beginPath();
     for (let ly = y + 0.07; ly < y + h - 0.02; ly += 0.07) {
@@ -468,38 +484,80 @@ function palWindow(ctx: Ctx, x: number, y: number, w: number, h: number, shutter
     }
     ctx.stroke();
   }
+  // cornice di pietra in rilievo
+  ctx.fillStyle = SHADOW;
+  ctx.fillRect(x - 0.02, y - 0.02, w + 0.12, h + 0.1);
+  rr(ctx, x - 0.06, y - 0.06, w + 0.12, h + 0.12, 0.03);
+  fillInk(ctx, '#f7efe2', 0.022);
+  // vetro, rientrato: in alto e a sinistra lo sguancio fa ombra
+  rr(ctx, x, y, w, h, 0.015);
+  fillInk(ctx, '#9fc8e6', 0.018);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(x + w * 0.62, y + h * 0.18, w * 0.09, h * 0.5);
+  if (lace) {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + h * 0.3);
+    for (let k = 4; k >= 0; k--) ctx.quadraticCurveTo(x + (w * (k + 0.5)) / 5, y + h * 0.42, x + (w * k) / 5, y + h * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = '#f7efe2';
+  ctx.fillRect(x + w / 2 - 0.013, y, 0.026, h);
+  ctx.fillRect(x, y + h * 0.42, w, 0.024);
+  ctx.fillStyle = 'rgba(40,30,60,0.3)';
+  ctx.fillRect(x, y, w, 0.06);
+  ctx.fillRect(x, y + 0.06, 0.04, h - 0.06);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.018;
+  ctx.strokeRect(x, y, w, h);
+  // davanzale che sporge
+  ledge(ctx, x - 0.1, y + h + 0.02, w + 0.2, 0.05, 0.05, STONE_LEDGE, 0.12);
   if (flowers) {
-    rr(ctx, x - 0.06, y + h - 0.02, w + 0.12, 0.11, 0.03);
-    fillInk(ctx, '#d9774a', 0.02);
+    rr(ctx, x - 0.06, y + h - 0.06, w + 0.12, 0.09, 0.02);
+    fillInk(ctx, '#d9774a', 0.018);
     for (let i = 0; i < 4; i++) {
       const fx = x + (i * w) / 3;
-      circle(ctx, fx, y + h - 0.05, 0.05);
+      circle(ctx, fx, y + h - 0.09, 0.05);
       fillInk(ctx, i % 2 ? '#f28bb6' : '#e84a4a', 0.014);
     }
   }
 }
 
+/** Tenda da sole: il telo inclinato visto da sopra, la mantovana che pende e l'ombra sul muro. */
 function awning(ctx: Ctx, x0: number, x1: number, y: number, colors: string[]) {
   const n = Math.max(3, Math.round((x1 - x0) / 0.22));
+  const slope = 0.26;
+  const flap = 0.12;
+  softShadow(ctx, x0 + 0.06, y + slope + flap * 0.8, x1 - x0, 0.3, 0.34);
   for (let i = 0; i < n; i++) {
     const a = x0 + ((x1 - x0) * i) / n;
     const b = x0 + ((x1 - x0) * (i + 1)) / n;
+    const c = colors[i % colors.length];
+    ctx.fillStyle = shade(c, 0.06);
+    ctx.fillRect(a, y, b - a, slope);
+    ctx.fillStyle = shade(c, -0.1);
     ctx.beginPath();
-    ctx.moveTo(a, y);
-    ctx.lineTo(b, y);
-    ctx.lineTo(b, y + 0.24);
-    ctx.quadraticCurveTo((a + b) / 2, y + 0.34, a, y + 0.24);
+    ctx.moveTo(a, y + slope);
+    ctx.lineTo(b, y + slope);
+    ctx.lineTo(b, y + slope + flap * 0.6);
+    ctx.quadraticCurveTo((a + b) / 2, y + slope + flap * 1.5, a, y + slope + flap * 0.6);
     ctx.closePath();
-    ctx.fillStyle = colors[i % colors.length];
     ctx.fill();
   }
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.025;
-  ctx.strokeRect(x0, y, x1 - x0, 0.24);
+  ctx.lineWidth = 0.022;
+  ctx.strokeRect(x0, y, x1 - x0, slope);
+  ctx.fillStyle = INK;
+  ctx.fillRect(x0 - 0.02, y - 0.02, x1 - x0 + 0.04, 0.035);
 }
 
 /** Vetrina a tema: quello che c'è dentro racconta il negozio. */
-function vitrine(ctx: Ctx, x: number, y: number, w: number, h: number, theme: Theme, seed: number) {
+function vitrine(ctx: Ctx, x: number, y: number, w: number, h: number, theme: Theme, seed: number, wall: string) {
+  rr(ctx, x - 0.06, y - 0.06, w + 0.12, h + 0.08, 0.05);
+  fillInk(ctx, shade(wall, -0.3), 0.022);
   rr(ctx, x, y, w, h, 0.04);
   fillInk(ctx, '#bfe6ff');
   ctx.save();
@@ -549,251 +607,44 @@ function vitrine(ctx: Ctx, x: number, y: number, w: number, h: number, theme: Th
     fillInk(ctx, '#5fb06a', 0.015);
   }
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillRect(x + 0.08, y + 0.05, 0.06, h - 0.1);
+  ctx.fillRect(x + w - 0.16, y + 0.1, 0.06, h - 0.16);
+  ctx.fillStyle = 'rgba(40,30,60,0.28)';
+  ctx.fillRect(x, y, w, 0.06);
+  ctx.fillRect(x, y + 0.06, 0.045, h);
   ctx.restore();
+  // soglia di pietra
+  ledge(ctx, x - 0.08, y + h, w + 0.16, 0.05, 0.05, STONE_LEDGE, 0.1);
 }
 
-/**
- * Il palazzo della sosta, largo quanto la strada, con il portone al centro.
- * y cresce verso il basso: 0 è il cornicione, BUILDING_HEIGHT il filo della piazza.
- */
-function paintPalazzo(ctx: Ctx, x0: number, x1: number, st: BuildingStyle, seed: number) {
-  const H = BUILDING_HEIGHT;
-  const th = THEMES[st.theme];
-  const door = DOOR_COL + 0.5;
-  // tetto di coppi, comignoli e antenna
-  ctx.fillStyle = '#c8664a';
-  ctx.fillRect(x0 - 0.1, -0.34, x1 - x0 + 0.2, 0.34);
-  ctx.fillStyle = '#b55a40';
-  for (let x = x0; x < x1; x += 0.2) ctx.fillRect(x, -0.34, 0.035, 0.34);
-  for (const cx of [1.4, 7.6]) {
-    rr(ctx, cx - 0.14, -0.62, 0.28, 0.34, 0.03);
-    fillInk(ctx, '#b55a40');
-    rr(ctx, cx - 0.18, -0.68, 0.36, 0.1, 0.03);
-    fillInk(ctx, '#9e4d37');
-  }
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.022;
+/** Comignolo che spunta dal tetto: faccia davanti, sopra, cappello e ombra sui coppi. */
+function chimney(ctx: Ctx, cx: number, base: number, w: number, h: number) {
+  ctx.fillStyle = SHADOW;
   ctx.beginPath();
-  ctx.moveTo(6.2, -0.34);
-  ctx.lineTo(6.2, -0.8);
-  ctx.moveTo(5.95, -0.72);
-  ctx.lineTo(6.45, -0.72);
-  ctx.moveTo(6.02, -0.62);
-  ctx.lineTo(6.38, -0.62);
-  ctx.stroke();
-
-  // muri
-  ctx.fillStyle = th.wall;
-  ctx.fillRect(x0, 0, x1 - x0, H);
-  // cornicione con i dentelli
-  ctx.fillStyle = shade(th.wall, -0.16);
-  ctx.fillRect(x0 - 0.1, 0, x1 - x0 + 0.2, 0.12);
-  ctx.fillStyle = shade(th.wall, 0.25);
-  for (let x = x0; x < x1; x += 0.16) ctx.fillRect(x, 0.12, 0.08, 0.06);
-  // marcapiani
-  ctx.fillStyle = shade(th.wall, 0.3);
-  ctx.fillRect(x0, 0.98, x1 - x0, 0.07);
-  ctx.fillRect(x0, 1.9, x1 - x0, 0.08);
-
-  // finestre in asse col portone, una ogni campata e mezza
-  const bays: number[] = [];
-  for (let k = -6; k <= 6; k++) {
-    const x = door + k * 1.5;
-    if (x > x0 + 0.4 && x < x1 - 0.4) bays.push(x);
-  }
-  // secondo piano
-  for (const x of bays) {
-    const r = hash(seed, Math.round(x * 10), 1);
-    palWindow(ctx, x - 0.22, 0.3, 0.44, 0.54, th.shutter, st.theme === 'home' || r < 0.3, r > 0.55);
-  }
-  // primo piano, con il balcone sopra il portone
-  for (const x of bays) {
-    if (Math.abs(x - door) < 0.6) continue;
-    const r = hash(seed, Math.round(x * 10), 2);
-    palWindow(ctx, x - 0.24, 1.18, 0.48, 0.58, th.shutter, st.theme === 'home' || r < 0.25, r > 0.35);
-  }
-  palWindow(ctx, door - 0.24, 1.14, 0.48, 0.62, th.shutter, st.theme === 'home', false);
-  rr(ctx, door - 0.7, 1.74, 1.4, 0.09, 0.02);
-  fillInk(ctx, '#e9e2d4', 0.022);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.02;
-  ctx.strokeRect(door - 0.66, 1.52, 1.32, 0.22);
-  ctx.beginPath();
-  for (let x = door - 0.6; x < door + 0.62; x += 0.12) {
-    ctx.moveTo(x, 1.52);
-    ctx.lineTo(x, 1.74);
-  }
-  ctx.stroke();
-  for (const fx of [door - 0.55, door + 0.55]) {
-    rr(ctx, fx - 0.1, 1.42, 0.2, 0.12, 0.03);
-    fillInk(ctx, '#d9774a', 0.018);
-    circle(ctx, fx, 1.4, 0.09);
-    fillInk(ctx, '#5fb06a', 0.018);
-    circle(ctx, fx - 0.03, 1.36, 0.035);
-    fillInk(ctx, '#e84a4a', 0.01);
-  }
-  if (st.theme === 'home') {
-    // i panni stesi della nonna
-    ctx.strokeStyle = '#6b6b7a';
-    ctx.lineWidth = 0.015;
-    ctx.beginPath();
-    ctx.moveTo(1.3, 0.86);
-    ctx.quadraticCurveTo(2.25, 1.0, 3.2, 0.86);
-    ctx.stroke();
-    ['#f28bb6', '#ffffff', '#5aa9f0', '#f7c948'].forEach((c, i) => {
-      rr(ctx, 1.55 + i * 0.42, 0.9 + Math.sin(i) * 0.01, 0.26, 0.3, 0.03);
-      fillInk(ctx, c, 0.016);
-    });
-  }
-
-  // piano terra a bugnato
-  const g0 = 1.98;
-  ctx.fillStyle = shade(th.wall, -0.08);
-  ctx.fillRect(x0, g0, x1 - x0, H - g0);
-  ctx.strokeStyle = shade(th.wall, -0.22);
-  ctx.lineWidth = 0.015;
-  ctx.beginPath();
-  for (let y = g0 + 0.2; y < H; y += 0.2) {
-    ctx.moveTo(x0, y);
-    ctx.lineTo(x1, y);
-    const off = Math.round((y - g0) / 0.2) % 2 ? 0.3 : 0;
-    for (let x = x0 + off; x < x1; x += 0.6) {
-      ctx.moveTo(x, y - 0.2);
-      ctx.lineTo(x, y);
-    }
-  }
-  ctx.stroke();
-
-  // insegna sopra il portone
-  const sw = 3.6;
-  rr(ctx, door - sw / 2, g0 + 0.06, sw, 0.42, 0.08);
-  fillInk(ctx, th.sign);
-  ctx.strokeStyle = shade(th.sign, 0.35);
-  ctx.lineWidth = 0.02;
-  rr(ctx, door - sw / 2 + 0.05, g0 + 0.11, sw - 0.1, 0.32, 0.06);
-  ctx.stroke();
-  cellText(ctx, st.label, door, g0 + 0.27, 0.25, 700, th.ink, sw - 0.9);
-  destIcon(ctx, th.icon, door - sw / 2 + 0.26, g0 + 0.27, 0.12);
-  destIcon(ctx, th.icon, door + sw / 2 - 0.26, g0 + 0.27, 0.12);
-
-  // portone: stipiti di pietra, battenti aperti e luce calda dentro
-  const dw = 1.2;
-  const dt = H - 1.02;
-  rr(ctx, door - dw / 2 - 0.12, dt - 0.1, dw + 0.24, H - dt + 0.1, 0.05);
-  fillInk(ctx, '#e9e2d4');
-  const glow = ctx.createLinearGradient(0, dt, 0, H);
-  glow.addColorStop(0, '#6b4a2e');
-  glow.addColorStop(1, '#f2c77a');
-  ctx.fillStyle = glow;
-  ctx.fillRect(door - dw / 2, dt, dw, H - dt);
-  ctx.fillStyle = 'rgba(255,236,170,0.45)';
-  ctx.beginPath();
-  ctx.moveTo(door - 0.3, H);
-  ctx.lineTo(door + 0.3, H);
-  ctx.lineTo(door + 0.18, dt + 0.3);
-  ctx.lineTo(door - 0.18, dt + 0.3);
+  ctx.moveTo(cx + w / 2, base - h);
+  ctx.lineTo(cx + w / 2 + 0.28, base - h + 0.12);
+  ctx.lineTo(cx + w / 2 + 0.28, base + 0.1);
+  ctx.lineTo(cx + w / 2, base);
   ctx.closePath();
   ctx.fill();
-  for (const sgn of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(door + (sgn * dw) / 2, dt);
-    ctx.lineTo(door + sgn * (dw / 2 - 0.2), dt + 0.08);
-    ctx.lineTo(door + sgn * (dw / 2 - 0.2), H - 0.02);
-    ctx.lineTo(door + (sgn * dw) / 2, H);
-    ctx.closePath();
-    fillInk(ctx, '#7a4b2a', 0.025);
-    circle(ctx, door + sgn * (dw / 2 - 0.14), dt + 0.55, 0.025);
-    fillInk(ctx, '#f7c948', 0.012);
+  rr(ctx, cx - w / 2, base - h, w, h, 0.02);
+  fillInk(ctx, '#c46a4c');
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 0.014;
+  ctx.beginPath();
+  for (let y = base - h + 0.1; y < base; y += 0.1) {
+    ctx.moveTo(cx - w / 2, y);
+    ctx.lineTo(cx + w / 2, y);
   }
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.03;
-  ctx.strokeRect(door - dw / 2, dt, dw, H - dt);
-  // lanterne ai lati
-  for (const sgn of [-1, 1]) {
-    const lx = door + sgn * (dw / 2 + 0.34);
-    ctx.fillStyle = INK;
-    ctx.fillRect(lx - 0.012, dt - 0.02, 0.024, 0.12);
-    rr(ctx, lx - 0.07, dt + 0.08, 0.14, 0.18, 0.03);
-    fillInk(ctx, '#ffe89a', 0.018);
-  }
-
-  // vetrine laterali con le tende
-  const vw = Math.min(1.5, door - dw / 2 - 0.8 - 0.4);
-  for (const vx of [door - dw / 2 - 0.6 - vw, door + dw / 2 + 0.6]) {
-    awning(ctx, vx - 0.08, vx + vw + 0.08, g0 + 0.58, th.awning);
-    vitrine(ctx, vx, g0 + 0.9, vw, 0.56, st.theme, seed);
-  }
-  // un dettaglio per ogni palazzo
-  if (st.theme === 'post') {
-    // cassetta postale rossa
-    const bx = door + dw / 2 + 0.3;
-    rr(ctx, bx - 0.13, H - 0.52, 0.26, 0.36, 0.06);
-    fillInk(ctx, '#e0443c');
-    ctx.fillStyle = INK;
-    ctx.fillRect(bx - 0.08, H - 0.44, 0.16, 0.025);
-    ctx.fillStyle = '#4a3b3b';
-    ctx.fillRect(bx - 0.02, H - 0.16, 0.04, 0.16);
-  } else if (st.theme === 'trattoria' || st.theme === 'haberdashery') {
-    // lavagnetta sul marciapiede
-    const bx = door - dw / 2 - 0.34;
-    ctx.strokeStyle = '#8a5a3c';
-    ctx.lineWidth = 0.03;
-    ctx.beginPath();
-    ctx.moveTo(bx - 0.14, H);
-    ctx.lineTo(bx, H - 0.5);
-    ctx.lineTo(bx + 0.14, H);
-    ctx.stroke();
-    rr(ctx, bx - 0.15, H - 0.5, 0.3, 0.34, 0.03);
-    fillInk(ctx, '#2f3b36', 0.02);
-    cellText(ctx, st.note, bx, H - 0.33, 0.07, 600, '#ffffff', 0.26);
-  } else {
-    // targa di ceramica col nome della nonna
-    const bx = door + dw / 2 + 0.3;
-    rr(ctx, bx - 0.16, dt + 0.34, 0.32, 0.2, 0.04);
-    fillInk(ctx, '#fdfaf3', 0.02);
-    ctx.strokeStyle = '#3d6fb8';
-    ctx.lineWidth = 0.015;
-    rr(ctx, bx - 0.13, dt + 0.37, 0.26, 0.14, 0.03);
-    ctx.stroke();
-    cellText(ctx, st.note, bx, dt + 0.44, 0.06, 600, '#3d6fb8', 0.22);
-  }
-  // zoccolo
-  ctx.fillStyle = shade(th.wall, -0.28);
-  ctx.fillRect(x0, H - 0.1, x1 - x0, 0.1);
+  ctx.stroke();
+  // cappello: lastra sopra, poi la faccia davanti
+  rr(ctx, cx - w / 2 - 0.05, base - h - 0.16, w + 0.1, 0.1, 0.02);
+  fillInk(ctx, '#d9cfc0', 0.02);
+  rr(ctx, cx - w / 2 - 0.05, base - h - 0.07, w + 0.1, 0.06, 0.015);
+  fillInk(ctx, '#a89f92', 0.02);
 }
 
-/** Tetti di coppi sotto il marciapiede di partenza: il quartiere della nonna. y cresce verso il basso da 0. */
-function paintRoofs(ctx: Ctx, sp: Span, rowsDown: number, seed: number) {
-  ctx.fillStyle = '#e9dfcc';
-  ctx.fillRect(sp.x0, 0, sp.x1 - sp.x0, 0.5);
-  ctx.fillStyle = '#cbbfa6';
-  ctx.fillRect(sp.x0, 0.42, sp.x1 - sp.x0, 0.08);
-  ctx.fillStyle = shade('#c8664a', -0.25);
-  ctx.fillRect(sp.x0, 0.5, sp.x1 - sp.x0, 0.14);
-  for (let y = 0.64; y < rowsDown; y += 0.32) {
-    const off = (Math.round(y / 0.32) % 2) * 0.16;
-    ctx.fillStyle = '#c8664a';
-    ctx.fillRect(sp.x0, y, sp.x1 - sp.x0, 0.32);
-    for (let x = Math.floor(sp.x0) - off; x < sp.x1; x += 0.32) {
-      rr(ctx, x + 0.02, y + 0.02, 0.28, 0.3, 0.12);
-      ctx.fillStyle = hash(Math.round(x * 10), Math.round(y * 10), seed) < 0.5 ? '#d9774a' : '#cf6d44';
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.14)';
-      ctx.fillRect(x + 0.08, y + 0.05, 0.05, 0.2);
-    }
-  }
-  // comignoli e un gatto che dorme al sole
-  for (let i = 0; i < 3; i++) {
-    const cx = sp.x0 + 1 + hash(seed, i, 40) * (sp.x1 - sp.x0 - 2);
-    const cy = 1.6 + i * 2.2 + hash(seed, i, 41);
-    rr(ctx, cx - 0.2, cy - 0.5, 0.4, 0.6, 0.04);
-    fillInk(ctx, '#b55a40');
-    rr(ctx, cx - 0.26, cy - 0.58, 0.52, 0.14, 0.04);
-    fillInk(ctx, '#9e4d37');
-  }
-  const catX = sp.x0 + 1.2 + hash(seed, 9, 9) * 2;
-  const catY = 2.6;
+/** Il gatto che dorme al sole sui tetti. */
+function cat(ctx: Ctx, catX: number, catY: number) {
   ellipse(ctx, catX, catY, 0.32, 0.18);
   fillInk(ctx, '#f2a65a');
   circle(ctx, catX + 0.3, catY - 0.08, 0.14);
@@ -821,6 +672,549 @@ function paintRoofs(ctx: Ctx, sp: Span, rowsDown: number, seed: number) {
   ctx.moveTo(catX - 0.3, catY + 0.05);
   ctx.quadraticCurveTo(catX - 0.5, catY + 0.2, catX - 0.3, catY + 0.3);
   ctx.stroke();
+}
+
+/** Falda di coppi tra y0 (gronda) e y1 (colmo, più in alto): le file si stringono salendo. */
+function tiles(ctx: Ctx, x0: number, x1: number, y0: number, y1: number, seed: number) {
+  let y = y0;
+  let h = 0.2;
+  let n = 0;
+  while (y > y1 + 0.02) {
+    const top = Math.max(y1, y - h);
+    ctx.fillStyle = '#b85a3e';
+    ctx.fillRect(x0, top, x1 - x0, y - top);
+    const tw = 0.3 * (0.8 + (h / 0.2) * 0.2);
+    const off = (n % 2) * tw * 0.5;
+    for (let x = x0 - off; x < x1; x += tw) {
+      rr(ctx, x + 0.015, top, tw - 0.03, y - top - 0.015, Math.min(0.1, h * 0.5));
+      ctx.fillStyle = hash(Math.round(x * 10), n, seed) < 0.5 ? '#d9774a' : '#cf6d44';
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      ctx.fillRect(x + tw * 0.2, top + 0.02, tw * 0.14, (y - top) * 0.6);
+    }
+    // ogni fila fa ombra su quella sotto
+    ctx.fillStyle = 'rgba(80,30,20,0.28)';
+    ctx.fillRect(x0, y - 0.025, x1 - x0, 0.025);
+    y = top;
+    h *= 0.9;
+    n++;
+  }
+}
+
+/** Altezza della facciata del palazzo della sosta, in righe. */
+export const FACADE_H = 2.9;
+/** Quanto si vede del tetto sopra la facciata, fino al colmo. */
+const ROOF_H = 1.08;
+/** Palazzo intero (facciata + tetto), per sapere in quali fette disegnarlo. */
+export const BUILDING_HEIGHT = FACADE_H + ROOF_H;
+/** Centro del portone e punto della freccia, in righe sopra la base del palazzo. */
+export const DOOR_Y = 0.42;
+export const ARROW_Y = 1.62;
+/** Mezza larghezza del corpo centrale del palazzo, attorno al portone. */
+const BODY_HALF = 2.8;
+/** Facciata delle case più basse ai lati. */
+const SIDE_H = 2.3;
+
+const NEIGHBOR_WALLS = ['#f2d7a6', '#d8e4c4', '#f6e3c8', '#e9c9b0', '#cfe0e8'];
+
+function polygon(ctx: Ctx, pts: [number, number][]) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+
+/**
+ * Tetto a padiglione del corpo centrale: la falda davanti, le due falde laterali (a
+ * sinistra al sole, a destra in ombra) e un filo di quella dietro, oltre il colmo.
+ */
+function hipRoof(ctx: Ctx, a0: number, a1: number, seed: number) {
+  const hip = 0.95;
+  const ridge = -0.84;
+  const back = -ROOF_H + 0.04;
+  const south: [number, number][] = [
+    [a0, 0],
+    [a1, 0],
+    [a1 - hip, ridge],
+    [a0 + hip, ridge],
+  ];
+  const west: [number, number][] = [
+    [a0, 0],
+    [a0 + hip, ridge],
+    [a0, back],
+  ];
+  const east: [number, number][] = [
+    [a1, 0],
+    [a1 - hip, ridge],
+    [a1, back],
+  ];
+  const north: [number, number][] = [
+    [a0, back],
+    [a0 + hip, ridge],
+    [a1 - hip, ridge],
+    [a1, back],
+  ];
+  polygon(ctx, north);
+  fillInk(ctx, '#9c4a33', 0.024);
+  for (const [face, tint] of [
+    [south, ''],
+    [west, 'rgba(255,240,220,0.18)'],
+    [east, 'rgba(60,20,20,0.3)'],
+  ] as [[number, number][], string][]) {
+    ctx.save();
+    polygon(ctx, face);
+    ctx.clip();
+    tiles(ctx, a0, a1, 0, back, seed);
+    if (tint) {
+      ctx.fillStyle = tint;
+      ctx.fillRect(a0, back, a1 - a0, -back);
+    }
+    ctx.restore();
+    polygon(ctx, face);
+    ctx.lineWidth = 0.024;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+  }
+  // colmo e displuvi coperti di coppi chiari
+  ctx.strokeStyle = '#e08a62';
+  ctx.lineWidth = 0.06;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(a0 + 0.03, -0.03);
+  ctx.lineTo(a0 + hip, ridge);
+  ctx.lineTo(a1 - hip, ridge);
+  ctx.lineTo(a1 - 0.03, -0.03);
+  ctx.stroke();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.018;
+  ctx.stroke();
+}
+
+/** Casa più bassa accanto al palazzo, con il suo tetto e il giardino dietro. */
+function neighbor(ctx: Ctx, xa: number, xb: number, side: -1 | 1, seed: number) {
+  const H = FACADE_H;
+  const top = H - SIDE_H;
+  const wall = NEIGHBOR_WALLS[Math.floor(hash(seed, side, 5) * NEIGHBOR_WALLS.length)];
+  const shutter = hash(seed, side, 6) < 0.5 ? '#4f9a5a' : '#8a6a4a';
+  const ridge = top - 0.86;
+  // giardino dietro, con gli alberi che spuntano oltre il tetto
+  ctx.fillStyle = '#7fbf5c';
+  ctx.fillRect(xa, -ROOF_H, xb - xa, ridge + ROOF_H + 0.05);
+  for (let i = 0; i < 4; i++) {
+    const tx = xa + 0.4 + i * 0.75 + hash(seed, i, side) * 0.2;
+    if (tx > xb - 0.2) break;
+    const ty = ridge - 0.12 - hash(seed, i, 7) * 0.08;
+    circle(ctx, tx + 0.1, ty + 0.06, 0.32);
+    ctx.fillStyle = SHADOW;
+    ctx.fill();
+    circle(ctx, tx, ty, 0.3);
+    fillInk(ctx, '#5fa54e', 0.022);
+    circle(ctx, tx - 0.1, ty - 0.1, 0.12);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fill();
+  }
+  // tetto a una falda verso di noi
+  tiles(ctx, xa, xb, top, ridge, seed + side);
+  ctx.fillStyle = '#9c4a33';
+  ctx.fillRect(xa, ridge - 0.06, xb - xa, 0.06);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.02;
+  ctx.strokeRect(xa, ridge - 0.06, xb - xa, top - ridge + 0.06);
+  const cx = side < 0 ? xb - 0.7 : xa + 0.9;
+  chimney(ctx, cx, top - 0.3, 0.26, 0.34);
+  // facciata
+  ctx.fillStyle = wall;
+  ctx.fillRect(xa, top, xb - xa, SIDE_H);
+  softShadow(ctx, xa, top + 0.12, xb - xa, 0.28, 0.32);
+  ctx.fillStyle = shade(wall, -0.16);
+  ctx.fillRect(xa, top + 0.02, xb - xa, 0.1);
+  rr(ctx, xa - 0.05, top - 0.05, xb - xa + 0.1, 0.08, 0.03);
+  fillInk(ctx, '#9aa0ad', 0.02);
+  ledge(ctx, xa, top + 1.02, xb - xa, 0.04, 0.05, wall, 0.14);
+  const door = DOOR_COL + 0.5;
+  for (let k = 3; k <= 6; k++) {
+    const x = door + side * (k - 0.5) * 1.5;
+    if (x < xa + 0.3 || x > xb - 0.3) continue;
+    palWindow(ctx, x - 0.21, top + 0.32, 0.42, 0.44, shutter, hash(seed, k, side) < 0.5, hash(seed, k, side + 3) < 0.5);
+    // al piano terra una serranda abbassata
+    const sx = x - 0.42;
+    const sy = top + 1.3;
+    rr(ctx, sx - 0.06, sy - 0.06, 0.96, H - sy + 0.06, 0.03);
+    fillInk(ctx, shade(wall, -0.3), 0.02);
+    ctx.fillStyle = '#b9bcc6';
+    ctx.fillRect(sx, sy, 0.84, H - sy);
+    ctx.fillStyle = 'rgba(40,30,60,0.18)';
+    for (let y = sy + 0.06; y < H; y += 0.08) ctx.fillRect(sx, y, 0.84, 0.02);
+    ctx.fillStyle = 'rgba(40,30,60,0.3)';
+    ctx.fillRect(sx, sy, 0.84, 0.06);
+  }
+  if (side < 0) {
+    // i panni stesi, con la loro ombra sul muro
+    const clothes = ['#f28bb6', '#ffffff', '#5aa9f0'];
+    const lx = xb - 1.5;
+    ctx.fillStyle = SHADOW;
+    clothes.forEach((_, i) => {
+      rr(ctx, lx + 0.14 + i * 0.4, top + 0.92, 0.24, 0.24, 0.03);
+      ctx.fill();
+    });
+    ctx.strokeStyle = '#6b6b7a';
+    ctx.lineWidth = 0.015;
+    ctx.beginPath();
+    ctx.moveTo(lx, top + 0.82);
+    ctx.quadraticCurveTo(lx + 0.65, top + 0.94, lx + 1.3, top + 0.82);
+    ctx.stroke();
+    clothes.forEach((c, i) => {
+      rr(ctx, lx + 0.1 + i * 0.4, top + 0.86 + Math.sin(i) * 0.01, 0.24, 0.24, 0.03);
+      fillInk(ctx, c, 0.016);
+    });
+  }
+  ctx.fillStyle = shade(wall, -0.3);
+  ctx.fillRect(xa, H - 0.1, xb - xa, 0.1);
+}
+
+/** Cantonali di pietra sugli spigoli del corpo centrale. */
+function quoins(ctx: Ctx, x: number, side: -1 | 1, y0: number, y1: number) {
+  let n = 0;
+  for (let y = y0; y < y1 - 0.05; y += 0.2) {
+    const w = n % 2 ? 0.16 : 0.26;
+    const bx = side < 0 ? x : x - w;
+    ctx.fillStyle = '#efe6d6';
+    ctx.fillRect(bx, y, w, 0.18);
+    ctx.fillStyle = 'rgba(40,30,60,0.2)';
+    ctx.fillRect(bx, y + 0.155, w, 0.025);
+    n++;
+  }
+  ctx.fillStyle = side < 0 ? 'rgba(255,255,255,0.25)' : 'rgba(40,30,60,0.25)';
+  ctx.fillRect(side < 0 ? x : x - 0.03, y0, 0.03, y1 - y0);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.024;
+  ctx.beginPath();
+  ctx.moveTo(x, y0);
+  ctx.lineTo(x, y1);
+  ctx.stroke();
+}
+
+/**
+ * Il palazzo della sosta: un corpo centrale alto col portone, tra due case più basse.
+ * y cresce verso il basso: 0 è la gronda del corpo centrale, FACADE_H il filo della piazza.
+ */
+function paintPalazzo(ctx: Ctx, x0: number, x1: number, st: BuildingStyle, seed: number) {
+  const H = FACADE_H;
+  const th = THEMES[st.theme];
+  const wall = th.wall;
+  const door = DOOR_COL + 0.5;
+  const c0 = door - BODY_HALF;
+  const c1 = door + BODY_HALF;
+
+  // --- le case ai lati, e l'ombra che il palazzo getta su quella di destra
+  neighbor(ctx, x0, c0, -1, seed);
+  neighbor(ctx, c1, x1, 1, seed);
+  ctx.fillStyle = 'rgba(40,30,60,0.22)';
+  polygon(ctx, [
+    [c1, -ROOF_H + 0.1],
+    [c1 + 0.55, -ROOF_H + 0.3],
+    [c1 + 0.55, H - SIDE_H + 0.5],
+    [c1, H - SIDE_H + 0.3],
+  ]);
+  ctx.fill();
+
+  // --- tetto a padiglione, comignoli, abbaino e antenna
+  hipRoof(ctx, c0 - 0.1, c1 + 0.1, seed);
+  chimney(ctx, door - 1.55, -0.4, 0.3, 0.42);
+  chimney(ctx, door + 1.75, -0.52, 0.32, 0.36);
+  {
+    // abbaino sopra il portone: facciatina con la finestra e il suo tettuccio a due falde
+    const ax = door;
+    const aw = 0.62;
+    const ab = -0.14;
+    const at = -0.52;
+    ctx.fillStyle = SHADOW;
+    ctx.fillRect(ax + aw / 2, at - 0.06, 0.16, ab - at + 0.1);
+    rr(ctx, ax - aw / 2, at, aw, ab - at, 0.02);
+    fillInk(ctx, wall);
+    rr(ctx, ax - 0.15, at + 0.08, 0.3, 0.24, 0.1);
+    fillInk(ctx, '#9fc8e6', 0.02);
+    ctx.fillStyle = 'rgba(40,30,60,0.3)';
+    ctx.fillRect(ax - 0.15, at + 0.12, 0.3, 0.05);
+    polygon(ctx, [
+      [ax - aw / 2 - 0.08, at + 0.02],
+      [ax, at - 0.2],
+      [ax, at - 0.36],
+      [ax - aw / 2 - 0.08, at - 0.16],
+    ]);
+    fillInk(ctx, '#d9774a', 0.022);
+    polygon(ctx, [
+      [ax + aw / 2 + 0.08, at + 0.02],
+      [ax, at - 0.2],
+      [ax, at - 0.36],
+      [ax + aw / 2 + 0.08, at - 0.16],
+    ]);
+    fillInk(ctx, '#a9503a', 0.022);
+  }
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.022;
+  ctx.beginPath();
+  const antX = door + 0.9;
+  ctx.moveTo(antX, -0.82);
+  ctx.lineTo(antX, -1.3);
+  ctx.moveTo(antX - 0.25, -1.22);
+  ctx.lineTo(antX + 0.25, -1.22);
+  ctx.moveTo(antX - 0.18, -1.12);
+  ctx.lineTo(antX + 0.18, -1.12);
+  ctx.stroke();
+  if (st.theme === 'home') cat(ctx, door - 1.0, -0.26);
+
+  // --- muro del corpo centrale, con la luce che viene dall'alto
+  ctx.fillStyle = wall;
+  ctx.fillRect(c0, 0, c1 - c0, H);
+  const light = ctx.createLinearGradient(0, 0, 0, H);
+  light.addColorStop(0, 'rgba(255,255,255,0.12)');
+  light.addColorStop(1, 'rgba(40,30,60,0.06)');
+  ctx.fillStyle = light;
+  ctx.fillRect(c0, 0, c1 - c0, H);
+  // gronda e cornicione con i dentelli: sporgono, e sotto il muro è in ombra
+  softShadow(ctx, c0, 0.22, c1 - c0, 0.36, 0.36);
+  ctx.fillStyle = shade(wall, 0.32);
+  ctx.fillRect(c0 - 0.06, 0.02, c1 - c0 + 0.12, 0.05);
+  ctx.fillStyle = shade(wall, -0.18);
+  ctx.fillRect(c0 - 0.06, 0.07, c1 - c0 + 0.12, 0.1);
+  ctx.fillStyle = 'rgba(45,42,62,0.6)';
+  ctx.fillRect(c0 - 0.06, 0.165, c1 - c0 + 0.12, 0.012);
+  ctx.fillStyle = shade(wall, 0.3);
+  for (let x = c0 + 0.04; x < c1 - 0.06; x += 0.16) ctx.fillRect(x, 0.17, 0.08, 0.05);
+  ctx.fillStyle = SHADOW;
+  for (let x = c0 + 0.04; x < c1 - 0.06; x += 0.16) ctx.fillRect(x + 0.08, 0.18, 0.025, 0.05);
+  rr(ctx, c0 - 0.14, -0.06, c1 - c0 + 0.28, 0.09, 0.03);
+  fillInk(ctx, '#9aa0ad', 0.02);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(c0 - 0.12, -0.045, c1 - c0 + 0.24, 0.02);
+  // marcapiani
+  ledge(ctx, c0, 0.84, c1 - c0, 0.04, 0.05, wall, 0.14);
+  ledge(ctx, c0, 1.55, c1 - c0, 0.04, 0.06, wall, 0.16);
+
+  // --- finestre in asse col portone, una ogni campata e mezza
+  const bays = [door - 1.5, door, door + 1.5];
+  for (const x of bays) {
+    const r = hash(seed, Math.round(x * 10), 1);
+    palWindow(ctx, x - 0.21, 0.28, 0.42, 0.42, th.shutter, st.theme === 'home' || r < 0.3, r > 0.4);
+  }
+  for (const x of bays) {
+    if (x === door) continue;
+    const r = hash(seed, Math.round(x * 10), 2);
+    palWindow(ctx, x - 0.22, 1.02, 0.44, 0.42, th.shutter, st.theme === 'home' || r < 0.25, r > 0.3);
+  }
+  // portafinestra e balcone sopra il portone
+  palWindow(ctx, door - 0.23, 0.98, 0.46, 0.5, th.shutter, st.theme === 'home', false);
+  const yb = 1.46;
+  softShadow(ctx, door - 0.66, yb + 0.17, 1.44, 0.24, 0.3);
+  ctx.fillStyle = '#efe7d8';
+  ctx.fillRect(door - 0.72, yb, 1.44, 0.1);
+  ctx.fillStyle = 'rgba(40,30,60,0.12)';
+  ctx.fillRect(door - 0.72, yb, 1.44, 0.03);
+  for (const fx of [door - 0.54, door + 0.54]) {
+    rr(ctx, fx - 0.09, yb - 0.06, 0.18, 0.11, 0.03);
+    fillInk(ctx, '#d9774a', 0.018);
+    circle(ctx, fx, yb - 0.1, 0.09);
+    fillInk(ctx, '#5fb06a', 0.018);
+    circle(ctx, fx - 0.03, yb - 0.14, 0.035);
+    fillInk(ctx, '#e84a4a', 0.01);
+  }
+  rr(ctx, door - 0.74, yb + 0.1, 1.48, 0.07, 0.02);
+  fillInk(ctx, '#d8cfbd', 0.022);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.02;
+  ctx.beginPath();
+  ctx.moveTo(door - 0.7, yb - 0.16);
+  ctx.lineTo(door + 0.7, yb - 0.16);
+  for (let x = door - 0.66; x < door + 0.7; x += 0.12) {
+    ctx.moveTo(x, yb - 0.16);
+    ctx.lineTo(x, yb + 0.1);
+  }
+  ctx.stroke();
+  ctx.lineWidth = 0.035;
+  ctx.beginPath();
+  ctx.moveTo(door - 0.72, yb - 0.17);
+  ctx.lineTo(door + 0.72, yb - 0.17);
+  ctx.stroke();
+
+  // --- piano terra a bugnato: ogni corso ha il bordo alto in luce e quello basso in ombra
+  const g0 = 1.64;
+  ctx.fillStyle = shade(wall, -0.08);
+  ctx.fillRect(c0, g0, c1 - c0, H - g0);
+  for (let y = g0; y < H; y += 0.2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(c0, y, c1 - c0, 0.025);
+    ctx.fillStyle = 'rgba(40,30,60,0.2)';
+    ctx.fillRect(c0, y + 0.175, c1 - c0, 0.025);
+    const off = Math.round((y - g0) / 0.2) % 2 ? 0.3 : 0;
+    for (let x = c0 + off; x < c1; x += 0.6) ctx.fillRect(x, y, 0.022, 0.2);
+  }
+  quoins(ctx, c0, -1, 0.22, H - 0.1);
+  quoins(ctx, c1, 1, 0.22, H - 0.1);
+
+  // insegna sopra il portone, staccata dal muro
+  const sw = 3.6;
+  const sy = g0 + 0.08;
+  rr(ctx, door - sw / 2 + 0.06, sy + 0.07, sw, 0.32, 0.08);
+  ctx.fillStyle = SHADOW;
+  ctx.fill();
+  rr(ctx, door - sw / 2 + 0.03, sy - 0.05, sw - 0.06, 0.1, 0.04);
+  fillInk(ctx, shade(th.sign, 0.3), 0.02);
+  rr(ctx, door - sw / 2, sy, sw, 0.32, 0.08);
+  fillInk(ctx, th.sign);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fillRect(door - sw / 2 + 0.06, sy + 0.26, sw - 0.12, 0.04);
+  ctx.strokeStyle = shade(th.sign, 0.35);
+  ctx.lineWidth = 0.02;
+  rr(ctx, door - sw / 2 + 0.05, sy + 0.04, sw - 0.1, 0.22, 0.06);
+  ctx.stroke();
+  cellText(ctx, st.label, door, sy + 0.155, 0.21, 700, th.ink, sw - 0.9);
+  destIcon(ctx, th.icon, door - sw / 2 + 0.24, sy + 0.155, 0.1);
+  destIcon(ctx, th.icon, door + sw / 2 - 0.24, sy + 0.155, 0.1);
+
+  // portone: cornice di pietra in rilievo, vano profondo con la luce calda dentro, gradino
+  const dw = 1.1;
+  const dt = H - 0.84;
+  ctx.fillStyle = SHADOW;
+  ctx.fillRect(door + dw / 2 + 0.12, dt - 0.05, 0.06, H - dt + 0.05);
+  rr(ctx, door - dw / 2 - 0.12, dt - 0.1, dw + 0.24, H - dt + 0.1, 0.05);
+  fillInk(ctx, '#e9e2d4');
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillRect(door - dw / 2 - 0.1, dt - 0.08, dw + 0.2, 0.025);
+  const glow = ctx.createLinearGradient(0, dt, 0, H);
+  glow.addColorStop(0, '#5a3d26');
+  glow.addColorStop(1, '#f2c77a');
+  ctx.fillStyle = glow;
+  ctx.fillRect(door - dw / 2, dt, dw, H - dt);
+  ctx.fillStyle = 'rgba(255,236,170,0.45)';
+  ctx.beginPath();
+  ctx.moveTo(door - 0.3, H);
+  ctx.lineTo(door + 0.3, H);
+  ctx.lineTo(door + 0.16, dt + 0.28);
+  ctx.lineTo(door - 0.16, dt + 0.28);
+  ctx.closePath();
+  ctx.fill();
+  for (const sgn of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(door + (sgn * dw) / 2, dt);
+    ctx.lineTo(door + sgn * (dw / 2 - 0.19), dt + 0.08);
+    ctx.lineTo(door + sgn * (dw / 2 - 0.19), H - 0.02);
+    ctx.lineTo(door + (sgn * dw) / 2, H);
+    ctx.closePath();
+    fillInk(ctx, '#7a4b2a', 0.025);
+    circle(ctx, door + sgn * (dw / 2 - 0.13), dt + 0.46, 0.025);
+    fillInk(ctx, '#f7c948', 0.012);
+  }
+  ctx.fillStyle = 'rgba(30,20,40,0.35)';
+  ctx.fillRect(door - dw / 2, dt, dw, 0.08);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.03;
+  ctx.strokeRect(door - dw / 2, dt, dw, H - dt);
+  // lanterne ai lati
+  for (const sgn of [-1, 1]) {
+    const lx = door + sgn * (dw / 2 + 0.32);
+    ctx.fillStyle = INK;
+    ctx.fillRect(lx - 0.012, dt - 0.04, 0.024, 0.12);
+    ctx.fillStyle = SHADOW;
+    ctx.fillRect(lx - 0.03, dt + 0.12, 0.14, 0.18);
+    rr(ctx, lx - 0.07, dt + 0.06, 0.14, 0.18, 0.03);
+    fillInk(ctx, '#ffe89a', 0.018);
+  }
+
+  // vetrine laterali con le tende
+  const vw = Math.min(1.5, door - dw / 2 - 0.8 - 0.4);
+  for (const vx of [door - dw / 2 - 0.62 - vw, door + dw / 2 + 0.62]) {
+    awning(ctx, vx - 0.1, vx + vw + 0.1, g0 + 0.48, th.awning);
+    vitrine(ctx, vx, g0 + 0.82, vw, 0.36, st.theme, seed, wall);
+  }
+  // zoccolo che sporge alla base
+  ctx.fillStyle = shade(wall, -0.3);
+  ctx.fillRect(c0, H - 0.1, c1 - c0, 0.1);
+  ctx.fillStyle = shade(wall, -0.12);
+  ctx.fillRect(c0, H - 0.12, c1 - c0, 0.03);
+  // gradino del portone e ombra del palazzo sulla piazza
+  softShadow(ctx, x0, H, x1 - x0, 0.26, 0.24);
+  ledge(ctx, door - dw / 2 - 0.2, H - 0.03, dw + 0.4, 0.07, 0.05, STONE_LEDGE, 0.1);
+
+  // un dettaglio per ogni palazzo, davanti al muro
+  if (st.theme === 'post') {
+    // cassetta postale rossa
+    const bx = door + dw / 2 + 0.34;
+    ctx.fillStyle = SHADOW;
+    ctx.fillRect(bx - 0.08, H - 0.46, 0.26, 0.4);
+    rr(ctx, bx - 0.13, H - 0.52, 0.26, 0.36, 0.06);
+    fillInk(ctx, '#e0443c');
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(bx - 0.1, H - 0.49, 0.2, 0.03);
+    ctx.fillStyle = INK;
+    ctx.fillRect(bx - 0.08, H - 0.42, 0.16, 0.025);
+    ctx.fillStyle = '#4a3b3b';
+    ctx.fillRect(bx - 0.02, H - 0.16, 0.04, 0.16);
+  } else if (st.theme === 'trattoria' || st.theme === 'haberdashery') {
+    // lavagnetta sul marciapiede
+    const bx = door - dw / 2 - 0.36;
+    ctx.fillStyle = SHADOW;
+    ctx.beginPath();
+    ctx.moveTo(bx - 0.14, H);
+    ctx.lineTo(bx + 0.2, H + 0.1);
+    ctx.lineTo(bx + 0.36, H + 0.02);
+    ctx.lineTo(bx + 0.14, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#8a5a3c';
+    ctx.lineWidth = 0.03;
+    ctx.beginPath();
+    ctx.moveTo(bx - 0.14, H);
+    ctx.lineTo(bx, H - 0.5);
+    ctx.lineTo(bx + 0.14, H);
+    ctx.stroke();
+    rr(ctx, bx - 0.15, H - 0.5, 0.3, 0.34, 0.03);
+    fillInk(ctx, '#2f3b36', 0.02);
+    cellText(ctx, st.note, bx, H - 0.33, 0.07, 600, '#ffffff', 0.26);
+  } else {
+    // targa di ceramica col nome della nonna
+    const bx = door + dw / 2 + 0.3;
+    rr(ctx, bx - 0.16, dt + 0.34, 0.32, 0.2, 0.04);
+    fillInk(ctx, '#fdfaf3', 0.02);
+    ctx.strokeStyle = '#3d6fb8';
+    ctx.lineWidth = 0.015;
+    rr(ctx, bx - 0.13, dt + 0.37, 0.26, 0.14, 0.03);
+    ctx.stroke();
+    cellText(ctx, st.note, bx, dt + 0.44, 0.06, 600, '#3d6fb8', 0.22);
+  }
+}
+
+/** Tetti di coppi sotto il marciapiede di partenza: il quartiere della nonna. y cresce verso il basso da 0. */
+function paintRoofs(ctx: Ctx, sp: Span, rowsDown: number, seed: number) {
+  // il muretto in cima e, sotto, i tetti che scendono verso di noi
+  ctx.fillStyle = '#e9dfcc';
+  ctx.fillRect(sp.x0, 0, sp.x1 - sp.x0, 0.5);
+  ctx.fillStyle = '#cbbfa6';
+  ctx.fillRect(sp.x0, 0.42, sp.x1 - sp.x0, 0.08);
+  ctx.fillStyle = shade('#c8664a', -0.25);
+  ctx.fillRect(sp.x0, 0.5, sp.x1 - sp.x0, 0.14);
+  softShadow(ctx, sp.x0, 0.64, sp.x1 - sp.x0, 0.3, 0.3);
+  for (let y = 0.64; y < rowsDown; y += 0.32) {
+    const off = (Math.round(y / 0.32) % 2) * 0.16;
+    ctx.fillStyle = '#b85a3e';
+    ctx.fillRect(sp.x0, y, sp.x1 - sp.x0, 0.32);
+    for (let x = Math.floor(sp.x0) - off; x < sp.x1; x += 0.32) {
+      rr(ctx, x + 0.02, y + 0.02, 0.28, 0.28, 0.12);
+      ctx.fillStyle = hash(Math.round(x * 10), Math.round(y * 10), seed) < 0.5 ? '#d9774a' : '#cf6d44';
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillRect(x + 0.08, y + 0.05, 0.05, 0.2);
+    }
+    ctx.fillStyle = 'rgba(80,30,20,0.25)';
+    ctx.fillRect(sp.x0, y + 0.3, sp.x1 - sp.x0, 0.02);
+  }
+  // comignoli e un gatto che dorme al sole
+  for (let i = 0; i < 3; i++) {
+    const cx = sp.x0 + 1 + hash(seed, i, 40) * (sp.x1 - sp.x0 - 2);
+    const cy = 2.1 + i * 2.2 + hash(seed, i, 41);
+    chimney(ctx, cx, cy, 0.4, 0.5);
+  }
+  cat(ctx, sp.x0 + 1.2 + hash(seed, 9, 9) * 2, 2.6);
 }
 
 /** Quante fette sono state disegnate e quanto tempo ci è voluto (per le misure di fluidità). */
@@ -873,8 +1267,8 @@ export class Background {
     // palazzi delle soste (sporgono nelle fette vicine)
     for (const stop of this.world.stops) {
       const base = doorRow(stop);
-      if (base > top + 0.5 || base + BUILDING_HEIGHT + 0.9 < y0) continue;
-      ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - (base + BUILDING_HEIGHT)) * s);
+      if (base > top + 0.5 || base + BUILDING_HEIGHT + 0.6 < y0) continue;
+      ctx.setTransform(s, 0, 0, s, -this.xLeft * s, (top - (base + FACADE_H)) * s);
       paintPalazzo(ctx, this.xLeft - 0.5, this.xRight + 0.5, this.styleOf(stop), stop.entry * 13 + 5);
     }
     // tetti sotto la partenza

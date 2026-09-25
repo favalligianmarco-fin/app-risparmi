@@ -22,7 +22,7 @@ caratteri usati.
 > • Più vai lontano, più il traffico corre e gli spazi si stringono.
 > • Alza la ciabatta della nonna: chi la vede inchioda.
 > • Il tram e i treni non si fermano per nessuno: al passaggio a livello aspetta che passi il regionale… o il treno veloce.
-> • Da dietro arriva il temporale: non si può restare fermi troppo a lungo.
+> • Da dietro arriva un nuvolone arrabbiato: non si può restare fermi troppo a lungo.
 > • Raccogli caramelle, bevi un caffè per andare più veloce, trova ciabatte di scorta.
 >
 > LE SOSTE
@@ -78,7 +78,7 @@ nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,i
 > • The further you go, the faster the traffic and the tighter the gaps.
 > • Raise Nonna's slipper: whoever sees it slams the brakes.
 > • Trams and trains stop for nobody: at the level crossing, wait for the regional train… or the high-speed one.
-> • A storm is coming from behind: you can't stand still for long.
+> • An angry storm cloud is coming from behind: you can't stand still for long.
 > • Collect candies, grab an espresso to walk faster, find spare slippers.
 >
 > STOPS
@@ -119,7 +119,7 @@ Non serve un account demo: non c'è login.
 |---|---|---|
 | Profanity or Crude Humor | **Frequente** | Le nonne dicono parolacce leggere in dialetto a ogni frenata |
 | Violenza (realistica, cartoon o fantasy) | Nessuna | Nessun contatto tra veicoli e personaggi: le auto frenano sempre prima, la ciabatta non colpisce nessuno |
-| Temi horror o paura | Nessuno | Il temporale è un nuvolone con la pioggia |
+| Temi horror o paura | Nessuno | Il temporale è un nuvolone buffo con la pioggia |
 | Temi maturi o allusivi, contenuti sessuali | Nessuno | |
 | Alcol, tabacco, droghe | Nessuno | Il caffè è un espresso |
 | Gioco d'azzardo, concorsi, loot box | No | |

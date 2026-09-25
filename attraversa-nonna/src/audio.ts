@@ -143,6 +143,32 @@ export class GameAudio {
     this.sfxOn = on;
   }
 
+  private rain: GainNode | null = null;
+
+  /** Scroscio di pioggia continuo: 0 spento, 1 temporale addosso. */
+  setRain(level: number) {
+    const c = this.ctx;
+    if (!c || c.state !== 'running') return;
+    const target = this.sfxOn ? Math.max(0, Math.min(1, level)) * 0.14 : 0;
+    if (!this.rain) {
+      if (target < 0.002) return;
+      const src = c.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 900;
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 5000;
+      this.rain = c.createGain();
+      this.rain.gain.value = 0.0001;
+      src.connect(hp).connect(lp).connect(this.rain).connect(this.sfxBus);
+      src.start();
+    }
+    this.rain.gain.setTargetAtTime(Math.max(0.0001, target), c.currentTime, 0.35);
+  }
+
   // ------------------------------------------------------------ primitive
 
   private env(g: GainNode, t: number, peak: number, attack: number, decay: number) {

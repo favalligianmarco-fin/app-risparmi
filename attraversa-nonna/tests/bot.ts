@@ -1,5 +1,5 @@
 import { COLS, isHazard } from '../src/world';
-import { HIT_HALF_WIDTH, STEP_TIME, STEP_TIME_COFFEE, Sim } from '../src/sim';
+import { HIT_HALF_WIDTH, HURRY, STEP_TIME, STEP_TIME_COFFEE, Sim } from '../src/sim';
 import type { Dir } from '../src/sim';
 
 /**
@@ -33,17 +33,23 @@ function rowSafe(sim: Sim, row: number, col: number, t0: number, t1: number): bo
       if (t <= stoppedFor) return v.x + v.dir * brake;
       return v.x + v.dir * (brake + rs.def.speed * (t - stoppedFor));
     };
-    const xs = [xAt(t0, v.speed), xAt(t1, v.speed), xAt(t0, rs.def.speed), xAt(t1, rs.def.speed)];
+    // chi va di fretta accelera fino alla sua velocità: si vede arrivare
+    const xs = [xAt(t0, v.speed), xAt(t1, v.speed), xAt(t0, rs.def.speed), xAt(t1, rs.def.speed), xAt(t1, v.cruise)];
     const lo = Math.min(...xs) - reach;
     const hi = Math.max(...xs) + reach;
     if (cx > lo && cx < hi) return false;
   }
-  // un veicolo che potrebbe entrare dal bordo durante l'attraversamento
-  if (rs.def.kind !== 'tram' && rs.def.kind !== 'rail' && rs.vehicles.length) {
+  // un veicolo che potrebbe entrare dal bordo durante l'attraversamento: nasce quando
+  // l'ultimo entrato si è allontanato di `nextGap`, poi arriva alla sua velocità
+  if (rs.def.kind !== 'tram' && rs.def.kind !== 'rail') {
+    const dir = rs.def.dir;
+    const entry = dir > 0 ? -5 : -(COLS + 5);
     const last = rs.vehicles[rs.vehicles.length - 1];
-    const entry = rs.def.dir > 0 ? -5 : COLS + 5;
-    const dist = Math.abs(cx - entry);
-    if (dist < rs.def.speed * t1 + 1.5 && Math.abs(last.x - entry) > rs.nextGap) return false;
+    const free = last ? last.x * dir - last.len / 2 - entry : Infinity;
+    const spawnIn = last ? Math.max(0, (rs.nextGap - free) / Math.max(last.speed, 0.5)) : 0;
+    const fastest = rs.def.hurry > 0 ? rs.def.speed * HURRY : rs.def.speed;
+    const arrive = spawnIn + (cx * dir - HIT_HALF_WIDTH - SAFETY - entry) / fastest;
+    if (arrive < t1) return false;
   }
   return true;
 }

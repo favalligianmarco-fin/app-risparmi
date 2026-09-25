@@ -3,7 +3,7 @@ import { SLIPPER_STOP } from '../sim';
 import type { Sim, SimEvent } from '../sim';
 import { COLS, DOOR_COL, doorRow, isTrain } from '../world';
 import type { Stop } from '../world';
-import { Background } from './background';
+import { ARROW_Y, Background, DOOR_Y } from './background';
 import type { BuildingStyle } from './background';
 import { drawPair } from './characters';
 import type { Mood } from './characters';
@@ -11,6 +11,11 @@ import { FONT, INK, rr } from './paint';
 import type { Ctx } from './paint';
 import { StaticSprites, drawPigeon } from './props';
 import { BRAKE_Y, VehicleSprites } from './vehicles';
+
+/** Quanto sporgono i nuvoloni sopra il fronte del temporale, in celle. */
+const STORM_TOP = 1.2;
+/** Quanti secondi prima di entrare in scena un mezzo accende la spia sul bordo. */
+const EDGE_WARN = 0.7;
 
 type PKind = 'puff' | 'star' | 'spark' | 'drop' | 'confetti' | 'feather' | 'dust' | 'ring';
 
@@ -57,7 +62,6 @@ export interface Texts {
   coffee: string;
   extraSlipper: string;
   extraHeart: string;
-  storm: string;
 }
 
 /** Le frasi della nonna scelta. */
@@ -65,6 +69,8 @@ export interface Voice {
   hit: string[];
   slipper: string[];
   happy: string[];
+  /** Quando il temporale arriva addosso (uguali per tutte le nonne). */
+  storm: string[];
 }
 
 export class Renderer {
@@ -85,13 +91,18 @@ export class Renderer {
   private floaters: Floater[] = [];
   private shake = 0;
   private flash = 0;
+  /** Dove cade il fulmine (frazione della larghezza) e dove sta il muso del nuvolone. */
+  private boltX = 0.5;
+  private faceX = 0;
+  private stormSprite: HTMLCanvasElement | null = null;
+  private stormKey = 0;
   /** Animazione della coppia che entra nel palazzo della sosta. */
   private enterT = -1;
   private enterStop: Stop | null = null;
   private time = 0;
   reduceMotion = false;
-  texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1', storm: 'Storm!' };
-  voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'] };
+  texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1' };
+  voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'], storm: ['Hurry!'] };
   styleOf: (stop: Stop) => BuildingStyle = () => {
     throw new Error('styleOf non impostato');
   };
@@ -239,9 +250,10 @@ export class Renderer {
           this.spawn('feather', e.x + (Math.random() - 0.5), e.y + Math.random() * 0.5, (Math.random() - 0.5) * 0.8, 0.3, 1.4, 0.06, '#c9cfdb');
         break;
       case 'stormNear':
-        this.float(this.texts.storm, sim.playerPos().x, sim.playerPos().y - 0.9, '#ffffff', false, 1.4, 0.34);
+        this.say('storm', '#3d5fa8', 1.8);
         break;
       case 'thunder':
+        this.boltX = 0.15 + Math.random() * 0.7;
         if (!this.reduceMotion) this.flash = 0.35;
         break;
       case 'over':
@@ -397,7 +409,15 @@ export class Renderer {
       }
       for (const v of rs.vehicles) {
         const x = this.X(v.x);
-        if (x < -4 * s || x > this.canvas.width + 4 * s) continue;
+        // chi sta per entrare da fuori schermo si annuncia con una spia sul bordo
+        if (sim.status === 'playing' && !isTrain(v.kind) && v.speed > 0.5) {
+          const front = v.x + (v.dir * v.len) / 2;
+          const far = v.dir > 0 ? this.xLeft - front : front - this.xRight;
+          if (far > 0 && far < v.speed * EDGE_WARN) this.edgeWarn(v.dir > 0 ? -1 : 1, cy, 1 - far / (v.speed * EDGE_WARN));
+        }
+        // si salta solo chi è tutto fuori schermo (i treni sono lunghi anche 12 celle)
+        const half = (v.len / 2 + 0.5) * s;
+        if (x + half < 0 || x - half > this.canvas.width) continue;
         const sp = this.vehicles.get(v.kind, v.color, v.dir);
         ctx.drawImage(sp.canvas, Math.round(x - sp.ox), Math.round(cy - sp.oy));
         if (v.braking && v.kind !== 'bike' && !isTrain(v.kind)) {
@@ -442,6 +462,31 @@ export class Renderer {
     }
   }
 
+  /** Spia sul bordo dello schermo: da quella parte sta arrivando un mezzo. */
+  private edgeWarn(side: -1 | 1, cy: number, k: number) {
+    const ctx = this.ctx;
+    const s = this.s;
+    const x = side < 0 ? 0 : this.canvas.width;
+    const y = cy + 0.02 * s;
+    ctx.globalAlpha = Math.min(1, 0.35 + k * 0.8);
+    ctx.fillStyle = k > 0.6 ? '#e84a4a' : '#ffffff';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 0.03 * s;
+    ctx.beginPath();
+    ctx.arc(x, y, 0.24 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = k > 0.6 ? '#ffffff' : INK;
+    ctx.lineWidth = 0.05 * s;
+    ctx.beginPath();
+    const tip = x - side * 0.14 * s;
+    ctx.moveTo(tip + side * 0.08 * s, y - 0.09 * s);
+    ctx.lineTo(tip, y);
+    ctx.lineTo(tip + side * 0.08 * s, y + 0.09 * s);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   private lamp(x: number, y: number, color: string, r = 0.2) {
     const ctx = this.ctx;
     const s = this.s;
@@ -465,7 +510,7 @@ export class Renderer {
     const s = this.s;
     const bob = Math.abs(Math.sin(this.time * 5)) * 0.18;
     const x = this.X(DOOR_COL + 0.5);
-    const y = this.Y(doorRow(stop) + 1.95 + bob);
+    const y = this.Y(doorRow(stop) + ARROW_Y + bob);
     ctx.fillStyle = '#f7c948';
     ctx.strokeStyle = INK;
     ctx.lineWidth = 0.05 * s;
@@ -482,46 +527,168 @@ export class Renderer {
     ctx.stroke();
   }
 
-  /** Il temporale che insegue la nonna: nuvoloni, pioggia e tutto più scuro sotto. */
+  /**
+   * Il temporale che insegue la coppia: un nuvolone arrabbiato che spunta sempre dal
+   * fondo dello schermo e sale man mano che si avvicina, con la pioggia sotto.
+   */
   private drawStorm(sim: Sim) {
+    if (!sim.started) return;
     const ctx = this.ctx;
     const s = this.s;
-    const edge = this.Y(sim.stormY);
-    if (edge > this.canvas.height + s * 1.5) return;
     const W = this.canvas.width;
-    const top = Math.max(-s, edge);
-    const g = ctx.createLinearGradient(0, top - s * 0.6, 0, top + s * 2.5);
-    g.addColorStop(0, 'rgba(52,56,86,0)');
-    g.addColorStop(0.3, 'rgba(52,56,86,0.55)');
-    g.addColorStop(1, 'rgba(40,42,68,0.78)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, top - s * 0.6, W, this.canvas.height - top + s);
-    // pioggia
-    ctx.strokeStyle = 'rgba(190,215,255,0.55)';
+    const Hc = this.canvas.height;
+    const t = this.time;
+    const close = sim.stormCloseness();
+    const edge = Math.min(this.Y(sim.stormY), Hc - (0.62 + close * 0.7) * s);
+    // cielo coperto: più è vicino, più si scurisce tutto
+    if (close > 0.2) {
+      ctx.fillStyle = `rgba(40,44,78,${((close - 0.2) * 0.2).toFixed(3)})`;
+      ctx.fillRect(0, 0, W, Hc);
+    }
+    // fronte del temporale già pronto in uno sprite, poi il buio pieno fino in fondo
+    const front = this.stormFront();
+    const sway = Math.sin(t * 0.7) * 0.08 * s;
+    ctx.drawImage(front, Math.round(-0.3 * s + sway), Math.round(edge - STORM_TOP * s));
+    const below = Math.round(edge - STORM_TOP * s) + front.height;
+    if (below < Hc) {
+      ctx.fillStyle = 'rgba(38,40,66,0.85)';
+      ctx.fillRect(0, below, W, Hc - below);
+    }
+    // pioggia sotto il nuvolone e, quando è addosso, anche davanti
+    ctx.strokeStyle = 'rgba(190,215,255,0.6)';
     ctx.lineWidth = Math.max(1, s * 0.025);
     ctx.beginPath();
-    const t = this.time;
-    for (let i = 0; i < 70; i++) {
+    const span = Hc - edge + s;
+    for (let i = 0; i < 60; i++) {
       const x = ((i * 97.13 + t * s * 0.9) % (W + s)) - s * 0.5;
-      const span = this.canvas.height - top + s;
-      const y = top + ((i * 53.7 + t * s * 9) % span);
+      const y = edge + ((i * 53.7 + t * s * 9) % span);
       ctx.moveTo(x, y);
       ctx.lineTo(x - s * 0.08, y + s * 0.32);
     }
-    ctx.stroke();
-    // nuvoloni sul fronte
-    for (let i = -1; i < W / s + 1; i++) {
-      const x = (i + 0.5 + Math.sin(t * 0.7 + i) * 0.08) * s;
-      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
-      ctx.fillStyle = '#5b6079';
-      ctx.beginPath();
-      ctx.arc(x, edge - s * 0.1, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#6d7290';
-      ctx.beginPath();
-      ctx.arc(x - r * 0.25, edge - s * 0.25, r * 0.6, 0, Math.PI * 2);
-      ctx.fill();
+    if (close > 0.55) {
+      const n = Math.round((close - 0.55) * 60);
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 131.7 + t * s * 0.9) % (W + s)) - s * 0.5;
+        const y = (i * 71.3 + t * s * 10) % (edge + s);
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - s * 0.07, y + s * 0.26);
+      }
     }
+    ctx.stroke();
+    // il fulmine, quando tuona
+    if (this.flash > 0.12) {
+      const bx = this.boltX * W;
+      ctx.strokeStyle = '#fff6b0';
+      ctx.lineWidth = s * 0.07;
+      ctx.lineJoin = 'miter';
+      ctx.beginPath();
+      ctx.moveTo(bx, edge);
+      ctx.lineTo(bx - s * 0.25, edge + s * 0.55);
+      ctx.lineTo(bx + s * 0.08, edge + s * 0.6);
+      ctx.lineTo(bx - s * 0.2, edge + s * 1.3);
+      ctx.stroke();
+      ctx.lineJoin = 'round';
+    }
+    this.drawStormFace(sim, edge, close);
+  }
+
+  /**
+   * Il fronte del temporale (buio sfumato e due file di nuvoloni) disegnato una volta
+   * sola per ogni risoluzione: a ogni frame basta copiarlo.
+   */
+  private stormFront(): HTMLCanvasElement {
+    const s = this.s;
+    const W = this.canvas.width + Math.ceil(0.6 * s);
+    if (this.stormSprite && this.stormSprite.width === W && this.stormKey === s) return this.stormSprite;
+    if (this.stormSprite) this.stormSprite.width = 0;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = Math.ceil((STORM_TOP + 1.7) * s);
+    const g = c.getContext('2d')!;
+    const e = STORM_TOP * s;
+    const grad = g.createLinearGradient(0, e - s * 0.3, 0, c.height);
+    grad.addColorStop(0, 'rgba(52,56,86,0)');
+    grad.addColorStop(0.2, 'rgba(52,56,86,0.6)');
+    grad.addColorStop(1, 'rgba(38,40,66,0.85)');
+    g.fillStyle = grad;
+    g.fillRect(0, e - s * 0.3, W, c.height);
+    for (let i = -1; i < W / s + 1; i++) {
+      const x = (i + 0.5) * s;
+      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
+      g.fillStyle = '#4f5470';
+      g.beginPath();
+      g.arc(x + s * 0.3, e - s * 0.28, r * 0.8, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (let i = -1; i < W / s + 1; i++) {
+      const x = (i + 0.5 + Math.sin(i * 1.7) * 0.08) * s;
+      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
+      g.fillStyle = '#5b6079';
+      g.beginPath();
+      g.arc(x, e - s * 0.1, r, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#6d7290';
+      g.beginPath();
+      g.arc(x - r * 0.25, e - s * 0.25, r * 0.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    this.stormSprite = c;
+    this.stormKey = s;
+    return c;
+  }
+
+  /** Il muso del nuvolone: segue la coppia, guarda in su e soffia. */
+  private drawStormFace(sim: Sim, edge: number, close: number) {
+    const ctx = this.ctx;
+    const s = this.s;
+    const px = this.X(sim.playerPos().x);
+    this.faceX = this.faceX === 0 ? px : this.faceX + (px - this.faceX) * 0.03;
+    const fx = this.faceX;
+    const fy = edge - s * 0.18 + Math.sin(this.time * 2.2) * s * 0.05;
+    ctx.fillStyle = '#737896';
+    ctx.beginPath();
+    ctx.arc(fx, fy, s * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8a8fac';
+    ctx.beginPath();
+    ctx.arc(fx - s * 0.3, fy - s * 0.3, s * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // occhi che guardano la nonna, sopracciglia arrabbiate
+    const look = Math.max(-1, Math.min(1, (px - fx) / (s * 2)));
+    for (const side of [-1, 1]) {
+      const ex = fx + side * s * 0.27;
+      const ey = fy - s * 0.12;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, s * 0.13, s * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = INK;
+      ctx.beginPath();
+      ctx.arc(ex + look * s * 0.05, ey - s * 0.06, s * 0.065, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = s * 0.07;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(ex + side * s * 0.14, ey - s * 0.3);
+      ctx.lineTo(ex - side * s * 0.1, ey - s * 0.18 + close * s * 0.04);
+      ctx.stroke();
+    }
+    // bocca che soffia, e le folate di vento verso la coppia
+    ctx.fillStyle = '#2d2a3e';
+    ctx.beginPath();
+    ctx.ellipse(fx, fy + s * 0.2, s * 0.09, s * 0.07 + close * s * 0.04, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const puff = (this.time * 1.4) % 1;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.7 * (1 - puff)).toFixed(3)})`;
+    ctx.lineWidth = s * 0.035;
+    ctx.beginPath();
+    for (const dx of [-0.18, 0, 0.18]) {
+      const y0 = fy - s * (0.1 + puff * 0.9);
+      ctx.moveTo(fx + dx * s, y0);
+      ctx.quadraticCurveTo(fx + (dx + 0.08) * s, y0 - s * 0.15, fx + dx * s, y0 - s * 0.3);
+    }
+    ctx.stroke();
   }
 
   private withWorld(x: number, y: number, flipX: number, fn: () => void) {
@@ -559,7 +726,7 @@ export class Renderer {
     if (this.enterT >= 0 && this.enterStop && sim.status === 'stop') {
       // la coppia va verso la porta del palazzo e sparisce dentro
       const k = Math.min(1, this.enterT / 0.7);
-      const door = { x: DOOR_COL + 0.5, y: doorRow(this.enterStop) + 0.9 };
+      const door = { x: DOOR_COL + 0.5, y: doorRow(this.enterStop) + DOOR_Y };
       x += (door.x - x) * k;
       y += (door.y - y) * k;
       alpha = 1 - Math.max(0, (this.enterT - 0.5) / 0.3);

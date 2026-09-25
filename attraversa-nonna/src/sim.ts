@@ -17,14 +17,20 @@ export const MAX_HEARTS = 3;
 export const MAX_SLIPPERS = 3;
 /** Metà larghezza della "scatola" di collisione della coppia nonna+scout. */
 export const HIT_HALF_WIDTH = 0.26;
-/** Il temporale non resta mai più di così indietro rispetto al punto più lontano raggiunto. */
-export const STORM_LAG = 12;
+/**
+ * Il temporale non resta mai più di così indietro rispetto al punto più lontano
+ * raggiunto: fermi, lo si ha addosso in meno di 20 secondi all'inizio e in meno di
+ * 8 più avanti.
+ */
+export const STORM_LAG = 8;
 const STUN_TIME = 1.05;
 const INVULN_TIME = 1.4;
 const SLIP_TIME = 0.35;
 const ACCEL = 5;
 const DECEL = 16;
 const TRAM_WARN = 1.8;
+/** Quanto più forte va un automobilista di fretta. */
+export const HURRY = 1.25;
 /** Righe simulate sotto e sopra la coppia: il resto del mondo è fermo. */
 const LIVE_BELOW = 12;
 const LIVE_ABOVE = 26;
@@ -35,7 +41,7 @@ export type OverCause = 'hits' | 'storm' | 'stop';
 
 /** Velocità del temporale (righe al secondo) in funzione dei metri già fatti. */
 export function stormSpeed(meters: number) {
-  return Math.min(0.9, 0.3 + meters / 1400);
+  return Math.min(1.05, 0.42 + meters / 1300);
 }
 
 export interface Vehicle {
@@ -55,6 +61,8 @@ export interface Vehicle {
   hitStopT: number;
   color: number;
   honkT: number;
+  /** Automobilista di fretta che non ha ancora suonato a chi gli sta davanti. */
+  hurry: boolean;
   braking: boolean;
 }
 
@@ -196,6 +204,12 @@ export class Sim {
     this.refreshLive();
   }
 
+  /** Quanto è vicino il temporale: 0 = lontano quanto può, 1 = addosso alla nonna. */
+  stormCloseness() {
+    const gap = this.playerPos().y - this.stormY;
+    return Math.max(0, Math.min(1, 1 - (gap - 0.5) / (STORM_LAG - 1)));
+  }
+
   get meters() {
     return this.maxRow;
   }
@@ -294,7 +308,10 @@ export class Sim {
 
   private makeVehicle(row: number, def: RowDef, kind: VehicleKind, center: number): Vehicle {
     // l'alta velocità va quasi il doppio del regionale
-    const cruise = kind === 'fast' ? def.speed * 1.75 : def.speed;
+    let cruise = kind === 'fast' ? def.speed * 1.75 : def.speed;
+    // qualcuno va di fretta: raggiunge chi gli sta davanti, frena all'ultimo e suona
+    const hurry = def.hurry > 0 && this.rng.chance(def.hurry);
+    if (hurry) cruise *= HURRY;
     return {
       id: this.nextId++,
       row,
@@ -309,6 +326,7 @@ export class Sim {
       color: this.rng.int(0, 7),
       honkT: 0,
       braking: false,
+      hurry,
     };
   }
 
@@ -374,6 +392,12 @@ export class Sim {
         const gap = leader.x * dir - leader.len / 2 - (v.x * dir + v.len / 2);
         if (gap < 0.3) desired = 0;
         else if (gap < 1.4) desired = Math.min(desired, leader.speed + (gap - 0.3) * 1.6);
+        // chi ha fretta, arrivato attaccato a quello davanti, suona (una volta sola)
+        if (v.hurry && gap < 1 && v.x > -1 && v.x < COLS + 1) {
+          v.hurry = false;
+          // (senza pescare dal generatore casuale: il clacson non deve cambiare il traffico)
+          if (v.id % 5 < 3) v.honkT = 0.05;
+        }
       }
       const dv = desired - v.speed;
       v.speed += dv > 0 ? Math.min(dv, ACCEL * h) : Math.max(dv, -DECEL * h);
@@ -451,7 +475,8 @@ export class Sim {
     p.slippers--;
     p.slipperT = 0.9;
     this.started = true;
-    for (let r = Math.max(0, p.row - 1); r <= p.row + 4; r++) {
+    // ferma un'intera carreggiata davanti (al massimo sono cinque corsie di fila)
+    for (let r = Math.max(0, p.row - 1); r <= p.row + 5; r++) {
       for (const v of this.rowState(r).vehicles) {
         if (isTrain(v.kind)) continue;
         v.stopT = SLIPPER_STOP;

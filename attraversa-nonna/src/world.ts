@@ -85,6 +85,8 @@ export interface RowDef {
   pigeons: number[];
   pickups: { col: number; kind: PickupKind }[];
   stop: Stop | null;
+  /** Quota di automobilisti di fretta: vanno più forte, raggiungono chi sta davanti e suonano. */
+  hurry: number;
 }
 
 export const isHazard = (k: RowKind) => k === 'road' || k === 'bike' || k === 'tram' || k === 'rail';
@@ -107,26 +109,29 @@ function baseRow(kind: RowKind): RowDef {
     pigeons: [],
     pickups: [],
     stop: null,
+    hurry: 0,
   };
 }
 
 /**
  * Difficoltà in funzione dei metri: governa quante corsie, quanto fitto il traffico
- * e quali novità compaiono. 1 alla partenza, ~12 a 250 m, 45 (il massimo) verso i 950 m.
+ * e quali novità compaiono. 1 alla partenza, ~15 a 250 m, 45 (il massimo) verso i 790 m.
  */
 export function difficultyAt(meters: number): number {
-  return Math.min(45, 1 + meters / 21.5);
+  return Math.min(45, 1 + meters / 18);
 }
 
 /**
  * Quanto vanno veloci i mezzi rispetto alla partenza: cresce sempre coi metri,
- * ×1.75 a 250 m, ×2.5 a 500 m, ×3.9 a 1000 m, fino a ×5 verso i 1350 m.
+ * ×1.9 a 250 m, ×2.8 a 500 m, ×4.6 a 1000 m, fino a ×5 verso i 1120 m.
  */
 export function speedFactor(meters: number): number {
-  return Math.min(5, 1 + meters / 340);
+  return Math.min(5, 1 + meters / 280);
 }
 
 type Group = 'road' | 'bike' | 'tram' | 'rail';
+/** Corsie pericolose di fila al massimo, anche quando le carreggiate si incastrano. */
+const MAX_RUN = 5;
 
 export class World {
   readonly rows: RowDef[] = [];
@@ -165,18 +170,19 @@ export class World {
       return;
     }
     const d = difficultyAt(this.rows.length);
-    this.appendGroup(d);
-    // da ~250 m in poi le carreggiate cominciano a incastrarsi senza spartitraffico in mezzo
+    const lanes = this.appendGroup(d);
+    // da ~200 m in poi le carreggiate cominciano a incastrarsi senza spartitraffico in
+    // mezzo, ma mai più di MAX_RUN corsie di fila
     const tangle = d < 12 ? 0 : Math.min(0.65, 0.15 + (d - 12) * 0.013);
-    if (this.rng.chance(tangle) && this.rows.length + 3 < this.nextStopAt) {
-      this.appendGroup(d, true);
+    if (this.rng.chance(tangle) && this.rows.length + 3 < this.nextStopAt && lanes < MAX_RUN) {
+      this.appendGroup(d, lanes);
     }
     this.appendMedian(d);
   }
 
   private pickGroup(d: number, joined: boolean): Group {
     const options: Group[] = ['road', 'road', 'road'];
-    if (d >= 4) options.push('bike');
+    if (d >= 4.5) options.push('bike');
     if (d >= 6 && this.lastGroup !== 'tram') options.push('tram', 'tram');
     if (d >= 9 && this.lastGroup !== 'rail') options.push('rail', 'rail');
     // una corsia "attaccata" alla precedente è quasi sempre una pista ciclabile o un binario
@@ -186,8 +192,15 @@ export class World {
     return g;
   }
 
-  private appendGroup(d: number, joined = false) {
+  /**
+   * Aggiunge una carreggiata (strada, pista ciclabile, tram o ferrovia) e dice quante
+   * corsie ha. `runBefore` sono le corsie pericolose subito sotto, se si incastra.
+   */
+  private appendGroup(d: number, runBefore = 0): number {
     const rng = this.rng;
+    const before = this.rows.length;
+    const joined = runBefore > 0;
+    const maxLanes = MAX_RUN - runBefore;
     const kind = this.pickGroup(d, joined);
     this.lastGroup = kind;
     // la prima strada, davanti a casa, è una via tranquilla
@@ -196,10 +209,12 @@ export class World {
     const carBase = quiet ? 1.05 : 1.25 * speedFactor(meters);
     const gapMin = quiet ? 4.2 : Math.max(1.75, 3.4 - d * 0.04);
     const gapSpread = Math.max(1.6, 4.2 - d * 0.05);
-    // più il mezzo è veloce, più spazio serve per passargli davanti: si tiene
-    // un minimo di "tempo libero" tra un veicolo e l'altro
-    const timeGap = (r: RowDef) => {
-      r.gapMin = Math.max(r.gapMin, r.speed * 0.5 + 0.7);
+    // più il mezzo è veloce, più spazio serve per passargli davanti: si tiene un
+    // minimo di "tempo libero" tra un veicolo e l'altro, più largo quando le corsie di
+    // fila sono tante (come nei viali veri, dove ogni corsia è meno fitta)
+    const timeGap = (r: RowDef, lanes: number) => {
+      const run = runBefore + lanes;
+      r.gapMin = Math.max(r.gapMin, r.speed * (0.5 + 0.07 * Math.max(0, run - 2)) + 0.7);
       r.gapMax = Math.max(r.gapMax, r.gapMin + 1.6);
     };
 
@@ -210,7 +225,7 @@ export class World {
         const base = 2 + Math.floor((d - 1) / 8);
         lanes = Math.max(joined ? 1 : 2, Math.min(4, base + rng.int(-1, 1)));
         if (d >= 28 && rng.chance(Math.min(0.35, 0.15 + (d - 28) * 0.01))) lanes = 5;
-        if (joined) lanes = Math.min(lanes, 2);
+        if (joined) lanes = Math.min(lanes, 2, maxLanes);
       }
       const rightward = lanes === 1 ? (rng.chance(0.5) ? 1 : 0) : Math.ceil(lanes / 2);
       for (let i = 0; i < lanes; i++) {
@@ -236,11 +251,13 @@ export class World {
           r.mix = ['boxy', 'boxy', 'bubble', 'fiorino', 'boxy'];
           r.speed = carBase * rng.range(0.9, 1.15);
         }
-        timeGap(r);
+        // gli scooter corrono già: la fretta ce l'hanno le auto e i furgoni
+        if (!r.mix.includes('scooter')) r.hurry = d < 5 ? 0 : Math.min(0.2, 0.05 + (d - 5) * 0.004);
+        timeGap(r, lanes);
         this.pushHazard(r, d);
       }
     } else if (kind === 'bike') {
-      const lanes = d >= 12 && rng.chance(0.5) ? 2 : 1;
+      const lanes = Math.min(maxLanes, d >= 12 && rng.chance(0.5) ? 2 : 1);
       const firstDir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
       for (let i = 0; i < lanes; i++) {
         const r = baseRow('bike');
@@ -251,12 +268,12 @@ export class World {
         r.speed = (carBase + 0.3) * rng.range(1.0, 1.2);
         r.gapMin = gapMin * 0.9 + rng.range(0, 0.5);
         r.gapMax = r.gapMin + gapSpread + rng.range(0.5, 1.5);
-        timeGap(r);
+        timeGap(r, lanes);
         this.pushHazard(r, d);
       }
     } else if (kind === 'rail') {
       // ferrovia: regionali lenti e treni ad alta velocità, con passaggio a livello
-      const tracks = d >= 18 && rng.chance(0.45) ? 2 : 1;
+      const tracks = Math.min(maxLanes, d >= 18 && rng.chance(0.45) ? 2 : 1);
       const firstDir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
       const fastShare = Math.min(0.6, 0.25 + (d - 9) * 0.01);
       for (let i = 0; i < tracks; i++) {
@@ -271,7 +288,7 @@ export class World {
         this.pushHazard(r, d);
       }
     } else {
-      const lanes = d >= 16 && rng.chance(0.4) ? 2 : 1;
+      const lanes = Math.min(maxLanes, d >= 16 && rng.chance(0.4) ? 2 : 1);
       const firstDir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
       for (let i = 0; i < lanes; i++) {
         const r = baseRow('tram');
@@ -285,6 +302,7 @@ export class World {
         this.pushHazard(r, d);
       }
     }
+    return this.rows.length - before;
   }
 
   private pushHazard(r: RowDef, d: number) {

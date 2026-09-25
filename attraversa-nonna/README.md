@@ -13,31 +13,44 @@ funziona offline, non raccoglie dati e non chiede permessi.
 
 - **Tocca** per fare un passo avanti; **scorri** a destra, a sinistra o indietro
   per spostarti. Ogni passo avanti è **un metro**: il punteggio è la distanza.
-- **Più vai lontano, più è difficile**: i mezzi vanno sempre più forte (×1,75 a
-  250 m, ×2,5 a 500 m, ×3,9 a 1000 m, fino a ×5), le corsie aumentano (fino a
-  cinque per carreggiata) e gli spazi si stringono; da ~250 m piste ciclabili e
-  binari si incastrano con le strade senza spartitraffico in mezzo, sempre più
-  spesso man mano che si va avanti.
+- **Più vai lontano, più è difficile**, un po' alla volta fin dall'inizio: i mezzi
+  vanno sempre più forte (×1,9 a 250 m, ×2,8 a 500 m, ×4,6 a 1000 m, fino a ×5
+  verso i 1120 m), le corsie aumentano e le novità arrivano presto: piste
+  ciclabili da ~65 m, tram da ~90 m, treni da ~145 m. Da ~200 m le carreggiate si
+  incastrano senza spartitraffico in mezzo, fino a cinque corsie di fila (più
+  sono, più ogni corsia è rada, come nei viali veri).
+- **Automobilisti di fretta**: sempre più spesso qualcuno va più forte degli
+  altri, raggiunge chi gli sta davanti, inchioda e suona.
+- **Spie ai bordi**: un cerchio sul bordo dello schermo avvisa che da quella parte
+  sta per entrare un mezzo (rosso quando è vicino).
 - **Mezzi disegnati di tre quarti**, come le nonne e i palazzi: si vede la
   fiancata intera e, sopra, cofano e tetto, così il cofano sta più basso del
   tetto e il profilo di ogni mezzo si riconosce al volo.
 - **Mezzi all'italiana, senza marchi**: l'utilitaria squadrata anni '80, la
   piccola tondeggiante col tettuccio di tela, il furgoncino col cassone alto, il
-  motocarro, lo scooter, il pullman, il tram. Da ~180 m arriva la **ferrovia**
+  motocarro, lo scooter, il pullman, il tram. Da ~145 m arriva la **ferrovia**
   con il passaggio a livello: treni regionali e treni ad alta velocità, che vanno
   quasi il doppio e si annunciano con più anticipo.
-- **Da dietro arriva il temporale**, sempre un po' più veloce: se raggiunge la
-  nonna, la corsa finisce. Non si può restare fermi a lungo.
+- **Da dietro arriva il temporale**: un nuvolone arrabbiato che spunta sempre dal
+  fondo dello schermo, segue la coppia con lo sguardo e sale se ci si ferma. Non
+  resta mai più di 8 metri indietro e va sempre più forte (0,4 m/s all'inizio,
+  1 m/s dopo gli 800 m): fermi, lo si ha addosso in meno di 20 secondi. Quando si
+  avvicina il cielo si scurisce, si sente la pioggia e la nonna protesta ("Cammina,
+  che mi si rovina la permanente!"). Se la raggiunge, la corsa finisce.
 - Le auto non investono mai la nonna: inchiodano all'ultimo e lei le manda a quel
   paese nel suo dialetto. Ogni spavento costa un cuore; con tre spaventi la
   corsa finisce.
 - **La ciabatta** (bottone giallo): la nonna la alza e chi la vede inchioda per
-  qualche secondo. Il tram però non si ferma per nessuno.
+  qualche secondo, su tutta la carreggiata davanti (fino a cinque corsie). Tram e
+  treni però non si fermano per nessuno.
 - Per strada ci sono **caramelle**, **caffè** (passo più veloce), **ciabatte di
   scorta** e, raramente, **cuori**.
-- **Soste**: ogni 120-180 m la strada finisce contro un palazzo grande quanto la
-  piazza, diverso per ogni sosta (la casa rosa della nonna, la posta gialla, la
-  merceria lilla, la trattoria color terracotta). Una freccia indica il portone:
+- **Soste**: ogni 120-180 m la strada finisce contro un palazzo, diverso per ogni
+  sosta (la casa rosa della nonna, la posta gialla, la merceria lilla, la
+  trattoria color terracotta). È disegnato in rilievo: corpo centrale più alto con
+  tetto a padiglione di coppi, comignoli e abbaino, finestre incassate con
+  davanzali, balcone e tende che fanno ombra, cantonali di pietra; ai lati due case
+  più basse con il giardino dietro. Una freccia indica il portone:
   si entra da lì, si fa il minigioco a tempo e si esce dall'altra parte. Se va
   bene: caramelle e un cuore in regalo; se va male la nonna si offende (un cuore
   in meno).
@@ -100,7 +113,7 @@ Serve Node.js 22 o più recente.
 ```bash
 npm install
 npm run dev          # gioca nel browser (anche dal telefono, sulla stessa rete)
-npm test             # unit test + il bot deve superare i 250 m, e reggere a 1150 e 1700 m
+npm test             # unit test + il bot deve superare i 250 m, e passare anche a 1150 e 1700 m
 npm run bot          # 12 corse del bot: metri raggiunti, soste, causa di fine
 npm run build        # build web in dist/
 npm run build:web    # un unico file HTML giocabile in dist-web/

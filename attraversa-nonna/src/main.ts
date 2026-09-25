@@ -70,6 +70,7 @@ class Game implements Controller {
   /** Risoluzione massima del canvas: scende da sola se il telefono non tiene i 60 fps. */
   private dprCap = 3;
   private slowFor = 0;
+  private rainLevel = 0;
 
   constructor() {
     this.renderer.texts = { ...t.fx };
@@ -151,7 +152,7 @@ class Game implements Controller {
 
   private applyNonna() {
     const n = this.nonna;
-    this.renderer.voice = { hit: n.hit, slipper: n.slipper, happy: n.happy };
+    this.renderer.voice = { hit: n.hit, slipper: n.slipper, happy: n.happy, storm: t.stormLines };
   }
 
   // ------------------------------------------------------------ ciclo principale
@@ -168,6 +169,12 @@ class Game implements Controller {
     if (this.mode === 'playing') {
       this.ui.updateHud(this.sim);
       this.watchSmoothness(dt);
+    }
+    // la pioggia si sente di più quanto più il temporale è vicino
+    const rain = this.mode === 'playing' && this.sim.started ? this.sim.stormCloseness() : 0;
+    if (Math.abs(rain - this.rainLevel) > 0.03 || (rain === 0 && this.rainLevel !== 0)) {
+      this.rainLevel = rain;
+      this.audio.setRain(rain);
     }
     // durante il minigioco la strada è coperta: non serve ridisegnarla
     if (!(this.mode === 'stop' && document.querySelector('.mg'))) {
