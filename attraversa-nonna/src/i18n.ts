@@ -30,12 +30,12 @@ const it = {
   statStops: 'Soste',
   overTitle: {
     hits: 'Troppi spaventi!',
-    storm: 'Che temporale!',
+    closed: 'Strada chiusa!',
     stop: 'La nonna si è offesa!',
   },
   overText: {
     hits: 'Per oggi la nonna torna a casa. Riprova?',
-    storm: 'Il temporale vi ha raggiunto: tutti a casa ad asciugarsi.',
+    closed: 'Lavori in corso: chi si ferma è perduto. Si torna a casa.',
     stop: 'Niente da fare, oggi non si parla più con nessuno.',
   },
   slipper: 'Ciabatta',
@@ -43,7 +43,7 @@ const it = {
     tap: 'Tocca per fare un passo avanti',
     swipe: 'Scorri a destra o a sinistra per spostarti',
     slipper: 'La ciabatta della nonna: chi la vede inchioda!',
-    storm: 'Muoviti: da dietro arriva il temporale!',
+    closing: 'Chi si ferma è perduto: dietro chiudono la strada!',
   },
   fx: {
     honk: 'Pèèè!',
@@ -51,14 +51,15 @@ const it = {
     extraSlipper: '+1 ciabatta',
     extraHeart: '+1 cuore',
   },
-  /** Cosa dice la nonna quando il temporale le arriva addosso. */
-  stormLines: [
-    'Sbrighiamoci, che piove!',
-    'Cammina, che mi si rovina la permanente!',
-    'Ho steso i panni, corri!',
-    'Avanti, che qui ci bagniamo!',
-    "Non ho preso l'ombrello, muoviti!",
+  /** Cosa dice la nonna quando dietro chiudono la strada, e quando si prova a tornare indietro. */
+  closingLines: [
+    'Chi si ferma è perduto!',
+    'Pure qua i lavori?!',
+    'Sbrighiamoci, chiudono la strada!',
+    'Questi cantieri non finiscono mai!',
+    'Muoviti, che ci chiudono dentro!',
   ],
+  backLines: ['Indietro non si torna!', 'Di là è chiuso, avanti!', 'Mica torniamo indietro!'],
   stops: {
     tiramisu: 'CASA DELLA NONNA',
     poste: 'POSTA',
@@ -159,12 +160,12 @@ const en: Strings = {
   statStops: 'Stops',
   overTitle: {
     hits: 'Too many scares!',
-    storm: 'What a storm!',
+    closed: 'Road closed!',
     stop: 'Nonna is offended!',
   },
   overText: {
     hits: 'Nonna is heading home for today. Try again?',
-    storm: 'The storm caught up with you: everybody home to dry off.',
+    closed: 'Roadworks: whoever stops is lost. Time to go home.',
     stop: 'That’s it, she’s not talking to anyone today.',
   },
   slipper: 'Slipper',
@@ -172,7 +173,7 @@ const en: Strings = {
     tap: 'Tap to take a step forward',
     swipe: 'Swipe left or right to sidestep',
     slipper: 'Nonna’s slipper: whoever sees it slams the brakes!',
-    storm: 'Hurry: a storm is coming from behind!',
+    closing: "Keep moving: they're closing the road behind you!",
   },
   fx: {
     honk: 'Beep!',
@@ -180,13 +181,14 @@ const en: Strings = {
     extraSlipper: '+1 slipper',
     extraHeart: '+1 heart',
   },
-  stormLines: [
-    "Hurry, it's going to pour!",
-    'Walk faster, my perm will be ruined!',
-    'My laundry is out, run!',
-    "Come on, we'll get soaked!",
-    'I forgot my umbrella, move it!',
+  closingLines: [
+    'Whoever stops is lost!',
+    'Roadworks here too?!',
+    "Hurry, they're closing the road!",
+    'These roadworks never end!',
+    "Move, or they'll fence us in!",
   ],
+  backLines: ['No going back!', "It's closed back there, forward!", "We're not turning back!"],
   stops: {
     tiramisu: 'NONNA’S HOUSE',
     poste: 'POST OFFICE',

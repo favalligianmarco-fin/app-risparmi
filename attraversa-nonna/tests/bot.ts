@@ -5,7 +5,7 @@ import type { Dir } from '../src/sim';
 /**
  * Un giocatore automatico "prudente": prevede dove saranno i veicoli e attraversa
  * un'intera carreggiata solo se la vede libera. Serve a dimostrare che la strada
- * infinita è sempre superabile, e a tarare difficoltà e velocità del temporale.
+ * infinita è sempre superabile, e a tarare difficoltà e tempi dei lavori in corso.
  */
 export interface BotResult {
   meters: number;
@@ -84,7 +84,7 @@ function decide(sim: Sim, waited: number): Dir | 'slipper' | null {
     // già in mezzo alla strada (previsione sbagliata): avanti se si può, altrimenti fermi o indietro
     if (rowSafe(sim, row + 1, p.col, step * 0.5, step * 1.6) && !sim.rowState(row + 1).blocked[p.col]) return 'up';
     if (rowSafe(sim, row, p.col, 0, step)) return null;
-    if (row > 0 && rowSafe(sim, row - 1, p.col, step * 0.5, step * 1.6)) return 'down';
+    if (row - 1 >= sim.backRow && rowSafe(sim, row - 1, p.col, step * 0.5, step * 1.6)) return 'down';
     return 'up';
   }
 
@@ -102,9 +102,12 @@ function decide(sim: Sim, waited: number): Dir | 'slipper' | null {
   }
 
   if (crossingSafe(sim, row, p.col, 0)) return 'up';
-  // il temporale si avvicina (o si aspetta da troppo): fuori la ciabatta
-  const storm = sim.playerPos().y - sim.stormY;
-  if ((waited > 3.5 || storm < 4) && p.slippers > 0 && runLength(sim, row) > 0) {
+  // sotto pressione (dietro stanno chiudendo) si fa come le persone: una corsia alla
+  // volta, se quella davanti resta libera abbastanza a lungo da poterci aspettare
+  const lane = next.def.kind === 'road' || next.def.kind === 'bike';
+  if (sim.closing && lane && !next.blocked[p.col] && rowSafe(sim, row + 1, p.col, step * 0.5, step * 0.5 + 1.6)) return 'up';
+  // dietro stanno chiudendo la strada (o si aspetta da troppo): fuori la ciabatta
+  if ((waited > 3.5 || sim.closing) && p.slippers > 0 && runLength(sim, row) > 0) {
     if (next.def.kind !== 'tram' && next.def.kind !== 'rail') return 'slipper';
   }
   // spostarsi di lato se da un'altra parte si passa prima

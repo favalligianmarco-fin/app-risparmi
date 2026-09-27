@@ -11,7 +11,7 @@ caratteri usati.
 
 **Testo promozionale** (max 170, modificabile senza nuova revisione):
 
-> Più lontano porti la nonna, più la strada si fa tosta. Alza la ciabatta, scappa dal temporale e salta la fila alla posta. Senza pubblicità né dati raccolti. (156)
+> Più lontano porti la nonna, più la strada si fa tosta. Alza la ciabatta, non fermarti mai e salta la fila alla posta. Senza pubblicità né dati raccolti. (152)
 
 **Descrizione** (max 4000):
 
@@ -22,7 +22,7 @@ caratteri usati.
 > • Più vai lontano, più il traffico corre e gli spazi si stringono.
 > • Alza la ciabatta della nonna: chi la vede inchioda.
 > • Il tram e i treni non si fermano per nessuno: al passaggio a livello aspetta che passi il regionale… o il treno veloce.
-> • Da dietro arriva un nuvolone arrabbiato: non si può restare fermi troppo a lungo.
+> • Chi si ferma è perduto: dietro ci sono i lavori in corso e, se resti fermo, chiudono la strada.
 > • Raccogli caramelle, bevi un caffè per andare più veloce, trova ciabatte di scorta.
 >
 > LE SOSTE
@@ -67,7 +67,7 @@ nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,i
 
 **Promotional text**:
 
-> The further you take Nonna, the tougher the road. Raise the slipper, outrun the storm and skip the post office queue. No ads, no data collected. (144)
+> The further you take Nonna, the tougher the road. Raise the slipper, never stop and skip the post office queue. No ads, no data collected. (138)
 
 **Description**:
 
@@ -78,7 +78,7 @@ nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,i
 > • The further you go, the faster the traffic and the tighter the gaps.
 > • Raise Nonna's slipper: whoever sees it slams the brakes.
 > • Trams and trains stop for nobody: at the level crossing, wait for the regional train… or the high-speed one.
-> • An angry storm cloud is coming from behind: you can't stand still for long.
+> • Whoever stops is lost: there are roadworks behind you, and if you stand still they close the road.
 > • Collect candies, grab an espresso to walk faster, find spare slippers.
 >
 > STOPS
@@ -119,7 +119,7 @@ Non serve un account demo: non c'è login.
 |---|---|---|
 | Profanity or Crude Humor | **Frequente** | Le nonne dicono parolacce leggere in dialetto a ogni frenata |
 | Violenza (realistica, cartoon o fantasy) | Nessuna | Nessun contatto tra veicoli e personaggi: le auto frenano sempre prima, la ciabatta non colpisce nessuno |
-| Temi horror o paura | Nessuno | Il temporale è un nuvolone buffo con la pioggia |
+| Temi horror o paura | Nessuno | Dietro ci sono solo transenne e lavori in corso |
 | Temi maturi o allusivi, contenuti sessuali | Nessuno | |
 | Alcol, tabacco, droghe | Nessuno | Il caffè è un espresso |
 | Gioco d'azzardo, concorsi, loot box | No | |
@@ -146,7 +146,7 @@ Sezione **iPhone 6,9"**: carica in quest'ordine i file di
 3. `3-palazzo.jpg`
 4. `4-posta.jpg`
 5. `5-treno.jpg`
-6. `6-temporale.jpg`
+6. `6-lavori.jpg`
 7. `7-nonne.jpg`
 
 Se cambi la grafica, rigenerali con `npm run screenshots`.

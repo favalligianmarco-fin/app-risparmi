@@ -18,11 +18,10 @@ export const MAX_SLIPPERS = 3;
 /** Metà larghezza della "scatola" di collisione della coppia nonna+scout. */
 export const HIT_HALF_WIDTH = 0.26;
 /**
- * Il temporale non resta mai più di così indietro rispetto al punto più lontano
- * raggiunto: fermi, lo si ha addosso in meno di 20 secondi all'inizio e in meno di
- * 8 più avanti.
+ * Lavori in corso dietro la coppia: una transenna la segue a questa distanza dal
+ * punto più lontano raggiunto (mai oltre l'ultimo posto sicuro) e sotto non si torna.
  */
-export const STORM_LAG = 8;
+export const BACK_LAG = 3;
 const STUN_TIME = 1.05;
 const INVULN_TIME = 1.4;
 const SLIP_TIME = 0.35;
@@ -37,11 +36,16 @@ const LIVE_ABOVE = 26;
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
 export type Status = 'playing' | 'stop' | 'over';
-export type OverCause = 'hits' | 'storm' | 'stop';
+export type OverCause = 'hits' | 'closed' | 'stop';
 
-/** Velocità del temporale (righe al secondo) in funzione dei metri già fatti. */
-export function stormSpeed(meters: number) {
-  return Math.min(1.05, 0.42 + meters / 1300);
+/** Secondi da fermi (senza fare un metro in più) prima che il cantiere avanzi. */
+export function closeGrace(meters: number) {
+  return Math.max(4.5, 7 - meters / 250);
+}
+
+/** Ogni quanti secondi, da fermi, la transenna avanza di una riga. */
+export function closeStep(meters: number) {
+  return Math.max(1.1, 1.6 - meters / 800);
 }
 
 export interface Vehicle {
@@ -137,8 +141,9 @@ export type SimEvent =
   | { type: 'respawn' }
   | { type: 'meter'; meters: number }
   | { type: 'stop'; stop: Stop }
-  | { type: 'stormNear' }
-  | { type: 'thunder' }
+  | { type: 'closeWarn' }
+  | { type: 'closeStep'; row: number }
+  | { type: 'backBlocked' }
   | { type: 'over'; cause: OverCause };
 
 const easeStep = (t: number) => t * t * (3 - 2 * t);
@@ -158,8 +163,12 @@ export class Sim {
   /** Riga più lontana raggiunta: sono i metri percorsi. */
   maxRow = 0;
   stopsDone = 0;
-  /** Il fronte del temporale, in righe. */
-  stormY = -9;
+  /** La transenna dei lavori: la coppia non può scendere sotto questa riga. */
+  backRow = 0;
+  /** Secondi passati senza fare un metro in più. */
+  idleT = 0;
+  /** La transenna sta avanzando perché la coppia è ferma. */
+  closing = false;
   currentStop: Stop | null = null;
   /** Nella prima partita gli spaventi prima di questa riga non tolgono cuori. */
   graceRows = 0;
@@ -169,8 +178,10 @@ export class Sim {
   private pendingOver: OverCause | null = null;
   private liveLo = 0;
   private liveHi = -1;
-  private stormWarned = false;
-  private thunderT = 6;
+  private closeT = 0;
+  /** Il posto sicuro più lontano raggiunto: la transenna non lo supera da sola. */
+  private maxSafe = 0;
+  private backWarnT = 0;
 
   constructor(seed: number) {
     this.world = new World(seed);
@@ -204,12 +215,6 @@ export class Sim {
     this.refreshLive();
   }
 
-  /** Quanto è vicino il temporale: 0 = lontano quanto può, 1 = addosso alla nonna. */
-  stormCloseness() {
-    const gap = this.playerPos().y - this.stormY;
-    return Math.max(0, Math.min(1, 1 - (gap - 0.5) / (STORM_LAG - 1)));
-  }
-
   get meters() {
     return this.maxRow;
   }
@@ -222,7 +227,10 @@ export class Sim {
     p.t = 1;
     p.moving = false;
     this.maxRow = Math.max(this.maxRow, row);
-    this.stormY = Math.min(this.stormY, row - STORM_LAG);
+    this.maxSafe = row;
+    this.backRow = Math.max(0, row - BACK_LAG);
+    this.idleT = 0;
+    this.closing = false;
     this.refreshLive();
   }
 
@@ -502,6 +510,18 @@ export class Sim {
     const nc = p.col + dx;
     const nr = p.row + dy;
     if (dx) p.facing = dx > 0 ? 1 : -1;
+    // indietro, oltre la transenna dei lavori, non si torna
+    if (nr < this.backRow && nr >= 0) {
+      p.bumpT = 0.18;
+      p.bumpDx = dx;
+      p.bumpDy = dy;
+      this.events.push({ type: 'bump' });
+      if (this.backWarnT <= 0) {
+        this.backWarnT = 2.5;
+        this.events.push({ type: 'backBlocked' });
+      }
+      return;
+    }
     const blocked = nc < 0 || nc >= COLS || nr < 0 || this.rowState(nr).blocked[nc] || this.parkedAt(nr, nc);
     if (blocked) {
       p.bumpT = 0.18;
@@ -530,9 +550,12 @@ export class Sim {
     if (!isHazard(def.kind)) {
       p.safeCol = p.col;
       p.safeRow = p.row;
+      this.maxSafe = Math.max(this.maxSafe, p.row);
     }
     if (p.row > this.maxRow) {
       this.maxRow = p.row;
+      this.idleT = 0;
+      this.closing = false;
       this.events.push({ type: 'meter', meters: this.maxRow });
     }
     if (rs.puddle[p.col]) {
@@ -581,15 +604,18 @@ export class Sim {
         return;
       }
     }
-    // la coppia esce dalla piazza, in cima, e il temporale riparte da lontano
+    // la coppia esce dalla piazza, in cima: dietro c'è il palazzo, e la transenna
+    // riparte da lì con qualche secondo di respiro in più
     const exit = exitRow(stop);
     p.col = p.fromCol = p.safeCol = 4;
     p.row = p.fromRow = p.safeRow = exit;
     p.t = 1;
     p.moving = false;
     this.maxRow = Math.max(this.maxRow, exit);
-    this.stormY = Math.min(this.stormY, exit - STORM_LAG);
-    this.stormWarned = false;
+    this.maxSafe = Math.max(this.maxSafe, exit);
+    this.backRow = Math.max(this.backRow, exit);
+    this.idleT = -2 * closeStep(this.maxRow);
+    this.closing = false;
     this.status = 'playing';
     this.refreshLive();
     this.events.push({ type: 'meter', meters: this.maxRow });
@@ -611,6 +637,7 @@ export class Sim {
       p.col = p.fromCol = p.safeCol;
       p.row = p.fromRow = p.safeRow;
       p.t = 1;
+      this.backRow = Math.min(this.backRow, p.row);
       this.events.push({ type: 'hit', x: p.col + 0.5, y: p.row + 0.5 });
     } else {
       // frenata all'ultimo: il veicolo si ferma a un palmo dalla nonna
@@ -640,6 +667,7 @@ export class Sim {
     p.t = 1;
     p.moving = false;
     p.invuln = INVULN_TIME;
+    this.backRow = Math.min(this.backRow, p.row);
     this.events.push({ type: 'respawn' });
   }
 
@@ -696,22 +724,32 @@ export class Sim {
     }
   }
 
-  /** Il temporale avanza da dietro: se raggiunge la nonna, la corsa è finita. */
-  private updateStorm(h: number) {
-    if (!this.started) return;
-    this.stormY = Math.max(this.stormY + stormSpeed(this.maxRow) * h, this.maxRow - STORM_LAG);
-    const py = this.playerPos().y;
-    const gap = py - this.stormY;
-    if (gap < 3.2 && !this.stormWarned) {
-      this.stormWarned = true;
-      this.events.push({ type: 'stormNear' });
-    } else if (gap > 4.5) this.stormWarned = false;
-    this.thunderT -= h;
-    if (this.thunderT <= 0) {
-      this.thunderT = this.rng.range(5, 11);
-      if (gap < 9) this.events.push({ type: 'thunder' });
+  /**
+   * I lavori in corso dietro la coppia: la transenna la segue andando avanti e, se
+   * si resta fermi troppo, avanza a scatti; quando la supera la strada è chiusa.
+   */
+  private updateClose(h: number) {
+    const p = this.player;
+    const anchor = Math.min(this.maxRow - BACK_LAG, this.maxSafe);
+    if (anchor > this.backRow) this.backRow = anchor;
+    if (this.backWarnT > 0) this.backWarnT -= h;
+    // nella prima partita, finché si impara, il cantiere aspetta
+    if (this.maxRow < this.graceRows) return;
+    this.idleT += h;
+    if (this.idleT >= closeGrace(this.maxRow)) {
+      if (!this.closing) {
+        this.closing = true;
+        this.closeT = 0;
+        this.events.push({ type: 'closeWarn' });
+      }
+      this.closeT += h;
+      if (this.closeT >= closeStep(this.maxRow)) {
+        this.closeT = 0;
+        this.backRow++;
+        this.events.push({ type: 'closeStep', row: this.backRow });
+      }
     }
-    if (gap < 0.15 && this.player.stunned <= 0) this.end('storm');
+    if (this.backRow > p.row && p.stunned <= 0) this.end('closed');
   }
 
   private updatePigeons(h: number) {
@@ -759,7 +797,7 @@ export class Sim {
     if (this.status === 'playing') {
       this.updatePlayer(h);
       if (this.status === 'playing') this.checkCollisions();
-      if (this.status === 'playing') this.updateStorm(h);
+      if (this.status === 'playing' && this.started) this.updateClose(h);
     }
     this.updatePigeons(h);
   }

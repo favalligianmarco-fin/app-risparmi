@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HIT_HALF_WIDTH, MAX_HEARTS, Sim } from '../src/sim';
+import { BACK_LAG, HIT_HALF_WIDTH, MAX_HEARTS, Sim, closeGrace } from '../src/sim';
 import type { SimEvent } from '../src/sim';
 import { DOOR_COL, exitRow, isHazard } from '../src/world';
 import { runBot } from './bot';
@@ -31,10 +31,10 @@ describe('oltre i 1000 metri', () => {
     const start = sim.world.rows.findIndex((r, i) => i > from && r.kind === 'median');
     sim.placePlayer(start, 4);
     sim.started = true;
-    // senza temporale: si misura solo se la strada è attraversabile
+    // senza lavori in corso: si misura solo se la strada è attraversabile
     const origUpdate = sim.update.bind(sim);
     sim.update = (dt: number) => {
-      sim.stormY = -1e9;
+      sim.idleT = -1e9;
       origUpdate(dt);
     };
     const res = runBot(sim, start + 80, 800);
@@ -131,16 +131,48 @@ describe('prima partita', () => {
   });
 });
 
-describe('temporale', () => {
-  it('chi resta fermo viene raggiunto', () => {
+describe('lavori in corso', () => {
+  it('chi resta fermo si vede chiudere la strada alle spalle', () => {
     const sim = new Sim(12);
     sim.input('left');
+    const seen: string[] = [];
     let over: SimEvent | undefined;
-    run(sim, 60, (e) => {
+    run(sim, 30, (e) => {
+      if (e.type === 'closeWarn' || e.type === 'closeStep') seen.push(e.type);
       if (e.type === 'over') over = e;
     });
     expect(sim.status).toBe('over');
-    expect(over).toEqual({ type: 'over', cause: 'storm' });
+    expect(over).toEqual({ type: 'over', cause: 'closed' });
+    // prima l'avviso, poi la transenna avanza a scatti fino alla coppia
+    expect(seen[0]).toBe('closeWarn');
+    expect(seen.filter((e) => e === 'closeStep').length).toBeGreaterThanOrEqual(1);
+    // all'inizio c'è tempo: almeno una manciata di secondi
+    expect(sim.elapsed).toBeGreaterThan(closeGrace(0));
+  });
+
+  it('la transenna segue a tre righe e oltre non si torna indietro', () => {
+    const sim = new Sim(4);
+    sim.world.ensure(80);
+    const median = sim.world.rows.findIndex((r, i) => i > 8 && r.kind === 'median');
+    sim.placePlayer(median, 4);
+    sim.started = true;
+    expect(sim.backRow).toBe(median - BACK_LAG);
+    // la strada alle spalle è appena stata chiusa: il passo indietro non si fa
+    sim.backRow = median;
+    let blocked = false;
+    sim.input('down');
+    run(sim, 0.3, (e) => {
+      if (e.type === 'backBlocked') blocked = true;
+    });
+    expect(blocked).toBe(true);
+    expect(sim.player.row).toBe(median);
+  });
+
+  it('andando avanti non chiude niente', () => {
+    const sim = new Sim(11);
+    const res = runBot(sim, 120, 400);
+    expect(res.cause).not.toBe('closed');
+    expect(res.meters).toBeGreaterThanOrEqual(120);
   });
 });
 

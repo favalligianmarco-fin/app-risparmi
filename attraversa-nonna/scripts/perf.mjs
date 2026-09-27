@@ -26,10 +26,10 @@ for (const throttle of [1, 4]) {
     const g = window.__game;
     g.play();
     const sim = g.sim;
-    // corsa automatica: sempre avanti, intoccabile, senza soste né temporale
+    // corsa automatica: sempre avanti, intoccabile, senza soste né lavori in corso
     window.__auto = setInterval(() => {
       sim.player.invuln = 99;
-      sim.stormY = -999;
+      sim.idleT = -999;
       if (sim.status === 'stop') sim.finishStop(true, 0);
       sim.input('up');
     }, 110);

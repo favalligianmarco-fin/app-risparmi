@@ -45,7 +45,7 @@ for (const locale of ['it-IT', 'en-US']) {
         Object.assign(sim.player, { invuln: 0 }, extra);
         sim.candies = 23;
         sim.started = true;
-        sim.stormY = r - 14;
+        sim.idleT = -999;
         g.renderer.setSim(sim);
         return r;
       },
@@ -70,7 +70,7 @@ for (const locale of ['it-IT', 'en-US']) {
     st.kind = 'pranzo';
     g.renderer.setSim(sim);
     sim.placePlayer(st.entry, 2);
-    sim.stormY = st.entry - 20;
+    sim.idleT = -999;
   });
   await page.waitForTimeout(1200);
   await shot('3-palazzo');
@@ -103,7 +103,7 @@ for (const locale of ['it-IT', 'en-US']) {
     return sim.world.rows.findIndex((r, i) => i > 300 && r.kind === 'rail' && sim.world.rows[i - 1].kind === 'median');
   });
   await start(0.31, railRow - 1, 3);
-  await page.evaluate(() => (window.__freeze = setInterval(() => (window.__game.sim.stormY = -1e9), 50)));
+  await page.evaluate(() => (window.__freeze = setInterval(() => (window.__game.sim.idleT = -1e9), 50)));
   await page.waitForFunction(
     (row) => {
       const v = window.__game.sim.rowState(row).vehicles[0];
@@ -117,14 +117,24 @@ for (const locale of ['it-IT', 'en-US']) {
   await shot('5-treno');
   await page.evaluate(() => clearInterval(window.__freeze));
 
-  // il temporale che insegue
+  // chi si ferma è perduto: dietro chiudono la strada
   await start(0.52, 150, 5);
   await page.evaluate(() => {
-    const sim = window.__game.sim;
-    sim.stormY = sim.playerPos().y - 2.6;
+    const g = window.__game;
+    const sim = g.sim;
+    sim.backRow = sim.player.row - 1;
+    sim.idleT = 60;
+    sim.closing = true;
+    g.renderer.onEvent({ type: 'closeWarn' }, sim);
+    window.__freeze = setInterval(() => {
+      sim.backRow = sim.player.row - 1;
+      sim.idleT = 60;
+      sim.closing = true;
+    }, 16);
   });
-  await page.waitForTimeout(900);
-  await shot('6-temporale');
+  await page.waitForTimeout(700);
+  await shot('6-lavori');
+  await page.evaluate(() => clearInterval(window.__freeze));
 
   // le nonne d'Italia
   await page.evaluate(() => window.__game.toMenu());

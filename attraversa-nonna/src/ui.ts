@@ -27,7 +27,7 @@ const swipe =
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-export type HintKind = 'tap' | 'swipe' | 'slipper' | 'storm';
+export type HintKind = 'tap' | 'swipe' | 'slipper' | 'closing';
 
 export interface Controller {
   save: Save;
@@ -140,7 +140,7 @@ export class UI {
     }
     const icon = kind === 'swipe' ? swipe : kind === 'tap' ? finger : '';
     this.el.hint.innerHTML = `${icon}<span>${esc(t.hints[kind])}</span>`;
-    this.el.hint.classList.toggle('warn', kind === 'storm');
+    this.el.hint.classList.toggle('warn', kind === 'closing');
     this.el.hint.hidden = false;
   }
 

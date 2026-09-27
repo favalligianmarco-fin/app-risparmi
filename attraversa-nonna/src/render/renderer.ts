@@ -12,8 +12,8 @@ import type { Ctx } from './paint';
 import { StaticSprites, drawPigeon } from './props';
 import { BRAKE_Y, VehicleSprites } from './vehicles';
 
-/** Quanto sporgono i nuvoloni sopra il fronte del temporale, in celle. */
-const STORM_TOP = 1.2;
+/** Quanto si alzano le transenne sopra il limite, in celle. */
+const BARRIER_UP = 0.72;
 /** Quanti secondi prima di entrare in scena un mezzo accende la spia sul bordo. */
 const EDGE_WARN = 0.7;
 
@@ -69,8 +69,9 @@ export interface Voice {
   hit: string[];
   slipper: string[];
   happy: string[];
-  /** Quando il temporale arriva addosso (uguali per tutte le nonne). */
-  storm: string[];
+  /** Quando dietro chiudono la strada, e quando si prova a tornare indietro (uguali per tutte). */
+  closing: string[];
+  back: string[];
 }
 
 export class Renderer {
@@ -90,19 +91,19 @@ export class Renderer {
   private particles: Particle[] = [];
   private floaters: Floater[] = [];
   private shake = 0;
-  private flash = 0;
-  /** Dove cade il fulmine (frazione della larghezza) e dove sta il muso del nuvolone. */
-  private boltX = 0.5;
-  private faceX = 0;
-  private stormSprite: HTMLCanvasElement | null = null;
-  private stormKey = 0;
+  /** Lavori in corso: si disegnano solo nelle corse vere (non dietro i menu). */
+  closeOn = false;
+  /** Dove sta disegnata la transenna (insegue la riga vera). */
+  private backY = 0;
+  private barrier: HTMLCanvasElement[] = [];
+  private barrierKey = '';
   /** Animazione della coppia che entra nel palazzo della sosta. */
   private enterT = -1;
   private enterStop: Stop | null = null;
   private time = 0;
   reduceMotion = false;
   texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1' };
-  voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'], storm: ['Hurry!'] };
+  voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'], closing: ['Hurry!'], back: ['No!'] };
   styleOf: (stop: Stop) => BuildingStyle = () => {
     throw new Error('styleOf non impostato');
   };
@@ -146,6 +147,7 @@ export class Renderer {
     this.bg?.dispose();
     this.bg = new Background(sim.world, this.s, this.xLeft, this.xRight, (st) => this.styleOf(st));
     this.sim = sim;
+    this.backY = sim.backRow;
     if (!keepCamera) {
       this.camY = this.camTarget(sim);
       for (const p of this.particles) p.alive = false;
@@ -249,18 +251,22 @@ export class Renderer {
         for (let i = 0; i < 6; i++)
           this.spawn('feather', e.x + (Math.random() - 0.5), e.y + Math.random() * 0.5, (Math.random() - 0.5) * 0.8, 0.3, 1.4, 0.06, '#c9cfdb');
         break;
-      case 'stormNear':
-        this.say('storm', '#3d5fa8', 1.8);
+      case 'closeWarn':
+        this.say('closing', '#c0392b', 1.8);
         break;
-      case 'thunder':
-        this.boltX = 0.15 + Math.random() * 0.7;
-        if (!this.reduceMotion) this.flash = 0.35;
+      case 'closeStep':
+        this.shake = Math.max(this.shake, 0.08);
+        for (let i = 0; i < 6; i++)
+          this.spawn('dust', 0.5 + Math.random() * (COLS - 1), e.row + 0.05, (Math.random() - 0.5) * 0.8, 0.5, 0.45, 0.1, '#e8dcc8');
+        break;
+      case 'backBlocked':
+        this.say('back', '#c0392b', 1.2);
         break;
       case 'over':
-        if (e.cause === 'storm') {
+        if (e.cause === 'closed') {
           const p = sim.playerPos();
-          for (let i = 0; i < 16; i++)
-            this.spawn('drop', p.x + (Math.random() - 0.5) * 1.2, p.y + 1.2, (Math.random() - 0.5) * 1.5, -1 - Math.random() * 2, 0.8, 0.05, '#7fc4ea');
+          for (let i = 0; i < 14; i++)
+            this.spawn('dust', p.x + (Math.random() - 0.5) * 1.6, p.y - 0.3, (Math.random() - 0.5) * 1.5, 0.4 + Math.random(), 0.8, 0.12, '#e8dcc8');
         }
         break;
       default:
@@ -302,7 +308,6 @@ export class Renderer {
     for (const f of this.floaters) f.t += dt;
     this.floaters = this.floaters.filter((f) => f.t < f.max);
     this.shake = Math.max(0, this.shake - dt);
-    this.flash = Math.max(0, this.flash - dt);
     if (this.enterT >= 0) this.enterT += dt;
   }
 
@@ -445,7 +450,7 @@ export class Renderer {
 
     this.drawDoorArrow(sim);
     this.drawParticles();
-    this.drawStorm(sim);
+    this.drawClose(sim, dt);
 
     if (this.xLeft < -0.05) {
       ctx.fillStyle = 'rgba(30,25,60,0.28)';
@@ -454,12 +459,6 @@ export class Renderer {
     }
 
     this.drawFloaters(sim);
-
-    if (this.flash > 0) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = `rgba(255,255,255,${(this.flash / 0.35) * 0.35})`;
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    }
   }
 
   /** Spia sul bordo dello schermo: da quella parte sta arrivando un mezzo. */
@@ -528,167 +527,182 @@ export class Renderer {
   }
 
   /**
-   * Il temporale che insegue la coppia: un nuvolone arrabbiato che spunta sempre dal
-   * fondo dello schermo e sale man mano che si avvicina, con la pioggia sotto.
+   * Lavori in corso dietro la coppia: una fila di transenne sul limite, con le
+   * lanterne che lampeggiano, e sotto la strada chiusa. Sta sempre dov'è davvero.
    */
-  private drawStorm(sim: Sim) {
-    if (!sim.started) return;
+  private drawClose(sim: Sim, dt: number) {
+    if (!this.closeOn) return;
     const ctx = this.ctx;
     const s = this.s;
     const W = this.canvas.width;
     const Hc = this.canvas.height;
-    const t = this.time;
-    const close = sim.stormCloseness();
-    const edge = Math.min(this.Y(sim.stormY), Hc - (0.62 + close * 0.7) * s);
-    // cielo coperto: più è vicino, più si scurisce tutto
-    if (close > 0.2) {
-      ctx.fillStyle = `rgba(40,44,78,${((close - 0.2) * 0.2).toFixed(3)})`;
-      ctx.fillRect(0, 0, W, Hc);
+    // scivola alla nuova riga invece di saltarci
+    this.backY += (sim.backRow - this.backY) * Math.min(1, dt * 12);
+    const line = Math.round(this.Y(this.backY));
+    if (line - BARRIER_UP * s > Hc) return;
+    if (line < Hc) {
+      ctx.fillStyle = 'rgba(40,36,56,0.38)';
+      ctx.fillRect(0, line, W, Hc - line);
     }
-    // fronte del temporale già pronto in uno sprite, poi il buio pieno fino in fondo
-    const front = this.stormFront();
-    const sway = Math.sin(t * 0.7) * 0.08 * s;
-    ctx.drawImage(front, Math.round(-0.3 * s + sway), Math.round(edge - STORM_TOP * s));
-    const below = Math.round(edge - STORM_TOP * s) + front.height;
-    if (below < Hc) {
-      ctx.fillStyle = 'rgba(38,40,66,0.85)';
-      ctx.fillRect(0, below, W, Hc - below);
+    // lanterne arancioni: lampeggiano a gruppi alterni, piano o di corsa se il cantiere avanza
+    const phase = Math.floor(this.time * (sim.closing ? 4 : 1.2)) % 2;
+    ctx.drawImage(this.barrierSprite(phase), 0, line - Math.round(BARRIER_UP * s));
+    // quando avanza, compare il cartello dei lavori dal lato opposto alla coppia
+    if (sim.closing) {
+      const col = sim.player.col < COLS / 2 ? COLS - 1.5 : 1.5;
+      this.roadworksSign(this.X(col), line);
     }
-    // pioggia sotto il nuvolone e, quando è addosso, anche davanti
-    ctx.strokeStyle = 'rgba(190,215,255,0.6)';
-    ctx.lineWidth = Math.max(1, s * 0.025);
-    ctx.beginPath();
-    const span = Hc - edge + s;
-    for (let i = 0; i < 60; i++) {
-      const x = ((i * 97.13 + t * s * 0.9) % (W + s)) - s * 0.5;
-      const y = edge + ((i * 53.7 + t * s * 9) % span);
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - s * 0.08, y + s * 0.32);
-    }
-    if (close > 0.55) {
-      const n = Math.round((close - 0.55) * 60);
-      for (let i = 0; i < n; i++) {
-        const x = ((i * 131.7 + t * s * 0.9) % (W + s)) - s * 0.5;
-        const y = (i * 71.3 + t * s * 10) % (edge + s);
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - s * 0.07, y + s * 0.26);
-      }
-    }
-    ctx.stroke();
-    // il fulmine, quando tuona
-    if (this.flash > 0.12) {
-      const bx = this.boltX * W;
-      ctx.strokeStyle = '#fff6b0';
-      ctx.lineWidth = s * 0.07;
-      ctx.lineJoin = 'miter';
-      ctx.beginPath();
-      ctx.moveTo(bx, edge);
-      ctx.lineTo(bx - s * 0.25, edge + s * 0.55);
-      ctx.lineTo(bx + s * 0.08, edge + s * 0.6);
-      ctx.lineTo(bx - s * 0.2, edge + s * 1.3);
-      ctx.stroke();
-      ctx.lineJoin = 'round';
-    }
-    this.drawStormFace(sim, edge, close);
   }
 
   /**
-   * Il fronte del temporale (buio sfumato e due file di nuvoloni) disegnato una volta
-   * sola per ogni risoluzione: a ogni frame basta copiarlo.
+   * La fila di transenne a strisce bianche e rosse con la fascia gialla e nera sotto,
+   * disegnata una volta sola in due versioni (lanterne alterne accese).
    */
-  private stormFront(): HTMLCanvasElement {
+  private barrierSprite(phase: number): HTMLCanvasElement {
     const s = this.s;
-    const W = this.canvas.width + Math.ceil(0.6 * s);
-    if (this.stormSprite && this.stormSprite.width === W && this.stormKey === s) return this.stormSprite;
-    if (this.stormSprite) this.stormSprite.width = 0;
+    const W = this.canvas.width;
+    const key = `${W}:${s}:${this.xLeft}`;
+    if (this.barrierKey !== key) {
+      for (const b of this.barrier) b.width = 0;
+      this.barrier = [this.paintBarrier(0), this.paintBarrier(1)];
+      this.barrierKey = key;
+    }
+    return this.barrier[phase];
+  }
+
+  private paintBarrier(phase: number): HTMLCanvasElement {
+    const s = this.s;
+    const W = this.canvas.width;
     const c = document.createElement('canvas');
     c.width = W;
-    c.height = Math.ceil((STORM_TOP + 1.7) * s);
+    c.height = Math.ceil((BARRIER_UP + 0.24) * s);
     const g = c.getContext('2d')!;
-    const e = STORM_TOP * s;
-    const grad = g.createLinearGradient(0, e - s * 0.3, 0, c.height);
-    grad.addColorStop(0, 'rgba(52,56,86,0)');
-    grad.addColorStop(0.2, 'rgba(52,56,86,0.6)');
-    grad.addColorStop(1, 'rgba(38,40,66,0.85)');
-    g.fillStyle = grad;
-    g.fillRect(0, e - s * 0.3, W, c.height);
-    for (let i = -1; i < W / s + 1; i++) {
-      const x = (i + 0.5) * s;
-      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
-      g.fillStyle = '#4f5470';
+    g.lineJoin = 'round';
+    const base = BARRIER_UP * s;
+    // fascia di pericolo sul bordo della zona chiusa
+    g.fillStyle = '#f7c948';
+    g.fillRect(0, base, W, 0.2 * s);
+    g.fillStyle = '#2d2a3e';
+    for (let x = -0.4 * s; x < W + 0.4 * s; x += 0.36 * s) {
       g.beginPath();
-      g.arc(x + s * 0.3, e - s * 0.28, r * 0.8, 0, Math.PI * 2);
+      g.moveTo(x, base + 0.2 * s);
+      g.lineTo(x + 0.18 * s, base + 0.2 * s);
+      g.lineTo(x + 0.38 * s, base);
+      g.lineTo(x + 0.2 * s, base);
+      g.closePath();
       g.fill();
     }
-    for (let i = -1; i < W / s + 1; i++) {
-      const x = (i + 0.5 + Math.sin(i * 1.7) * 0.08) * s;
-      const r = s * (0.55 + ((i * 37) % 5) * 0.06);
-      g.fillStyle = '#5b6079';
+    g.fillStyle = INK;
+    g.fillRect(0, base - 0.02 * s, W, 0.04 * s);
+    // una transenna per colonna: asse a strisce su due cavalletti
+    for (let col = Math.floor(this.xLeft) - 1; col < this.xRight + 1; col++) {
+      const cx = this.X(col + 0.5);
+      const bw = 0.84 * s;
+      const bh = 0.24 * s;
+      const by = base - 0.46 * s;
+      g.fillStyle = 'rgba(40,30,60,0.22)';
+      g.fillRect(cx - bw / 2 + 0.05 * s, base - 0.04 * s, bw, 0.08 * s);
+      g.strokeStyle = INK;
+      g.lineWidth = 0.05 * s;
+      g.lineCap = 'round';
+      for (const lx of [cx - bw * 0.36, cx + bw * 0.36]) {
+        g.beginPath();
+        g.moveTo(lx - 0.07 * s, base);
+        g.lineTo(lx, by + bh);
+        g.lineTo(lx + 0.07 * s, base);
+        g.stroke();
+      }
+      g.save();
       g.beginPath();
-      g.arc(x, e - s * 0.1, r, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#6d7290';
-      g.beginPath();
-      g.arc(x - r * 0.25, e - s * 0.25, r * 0.6, 0, Math.PI * 2);
-      g.fill();
+      g.rect(cx - bw / 2, by, bw, bh);
+      g.clip();
+      g.fillStyle = '#ffffff';
+      g.fillRect(cx - bw / 2, by, bw, bh);
+      g.fillStyle = '#e0443c';
+      for (let x = cx - bw / 2 - bh; x < cx + bw / 2 + bh; x += 0.3 * s) {
+        g.beginPath();
+        g.moveTo(x, by + bh);
+        g.lineTo(x + 0.15 * s, by + bh);
+        g.lineTo(x + 0.15 * s + bh, by);
+        g.lineTo(x + bh, by);
+        g.closePath();
+        g.fill();
+      }
+      g.fillStyle = 'rgba(40,30,60,0.18)';
+      g.fillRect(cx - bw / 2, by + bh * 0.72, bw, bh * 0.28);
+      g.restore();
+      g.strokeStyle = INK;
+      g.lineWidth = 0.03 * s;
+      g.strokeRect(cx - bw / 2, by, bw, bh);
+      // una lanterna ogni due transenne
+      if (col % 2 === 0) {
+        const on = (col / 2 + phase) % 2 === 0;
+        const lx = cx - bw / 2 + 0.1 * s;
+        const ly = by - 0.04 * s;
+        if (on) {
+          g.fillStyle = 'rgba(255,170,40,0.35)';
+          g.beginPath();
+          g.arc(lx, ly, 0.16 * s, 0, Math.PI * 2);
+          g.fill();
+        }
+        g.fillStyle = on ? '#ffb13d' : '#b86a1e';
+        g.strokeStyle = INK;
+        g.lineWidth = 0.025 * s;
+        g.beginPath();
+        g.arc(lx, ly, 0.07 * s, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+      }
     }
-    this.stormSprite = c;
-    this.stormKey = s;
     return c;
   }
 
-  /** Il muso del nuvolone: segue la coppia, guarda in su e soffia. */
-  private drawStormFace(sim: Sim, edge: number, close: number) {
+  /** Il cartello triangolare dei lavori in corso, piantato sul limite. */
+  private roadworksSign(x: number, line: number) {
     const ctx = this.ctx;
     const s = this.s;
-    const px = this.X(sim.playerPos().x);
-    this.faceX = this.faceX === 0 ? px : this.faceX + (px - this.faceX) * 0.03;
-    const fx = this.faceX;
-    const fy = edge - s * 0.18 + Math.sin(this.time * 2.2) * s * 0.05;
-    ctx.fillStyle = '#737896';
+    const top = line - 1.25 * s;
+    ctx.fillStyle = '#6d7280';
+    ctx.fillRect(x - 0.03 * s, top + 0.4 * s, 0.06 * s, line - top - 0.4 * s);
     ctx.beginPath();
-    ctx.arc(fx, fy, s * 0.85, 0, Math.PI * 2);
+    ctx.moveTo(x, top);
+    ctx.lineTo(x + 0.3 * s, top + 0.52 * s);
+    ctx.lineTo(x - 0.3 * s, top + 0.52 * s);
+    ctx.closePath();
+    ctx.fillStyle = '#e0443c';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 0.03 * s;
+    ctx.lineJoin = 'round';
     ctx.fill();
-    ctx.fillStyle = '#8a8fac';
-    ctx.beginPath();
-    ctx.arc(fx - s * 0.3, fy - s * 0.3, s * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    // occhi che guardano la nonna, sopracciglia arrabbiate
-    const look = Math.max(-1, Math.min(1, (px - fx) / (s * 2)));
-    for (const side of [-1, 1]) {
-      const ex = fx + side * s * 0.27;
-      const ey = fy - s * 0.12;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(ex, ey, s * 0.13, s * 0.16, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = INK;
-      ctx.beginPath();
-      ctx.arc(ex + look * s * 0.05, ey - s * 0.06, s * 0.065, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = s * 0.07;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(ex + side * s * 0.14, ey - s * 0.3);
-      ctx.lineTo(ex - side * s * 0.1, ey - s * 0.18 + close * s * 0.04);
-      ctx.stroke();
-    }
-    // bocca che soffia, e le folate di vento verso la coppia
-    ctx.fillStyle = '#2d2a3e';
-    ctx.beginPath();
-    ctx.ellipse(fx, fy + s * 0.2, s * 0.09, s * 0.07 + close * s * 0.04, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const puff = (this.time * 1.4) % 1;
-    ctx.strokeStyle = `rgba(255,255,255,${(0.7 * (1 - puff)).toFixed(3)})`;
-    ctx.lineWidth = s * 0.035;
-    ctx.beginPath();
-    for (const dx of [-0.18, 0, 0.18]) {
-      const y0 = fy - s * (0.1 + puff * 0.9);
-      ctx.moveTo(fx + dx * s, y0);
-      ctx.quadraticCurveTo(fx + (dx + 0.08) * s, y0 - s * 0.15, fx + dx * s, y0 - s * 0.3);
-    }
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, top + 0.1 * s);
+    ctx.lineTo(x + 0.2 * s, top + 0.45 * s);
+    ctx.lineTo(x - 0.2 * s, top + 0.45 * s);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    // l'omino che scava
+    ctx.fillStyle = INK;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 0.025 * s;
+    ctx.beginPath();
+    ctx.arc(x - 0.02 * s, top + 0.22 * s, 0.028 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 0.03 * s, top + 0.26 * s);
+    ctx.lineTo(x - 0.07 * s, top + 0.36 * s);
+    ctx.lineTo(x - 0.11 * s, top + 0.42 * s);
+    ctx.moveTo(x - 0.07 * s, top + 0.36 * s);
+    ctx.lineTo(x - 0.02 * s, top + 0.42 * s);
+    ctx.moveTo(x - 0.03 * s, top + 0.28 * s);
+    ctx.lineTo(x + 0.06 * s, top + 0.32 * s);
+    ctx.moveTo(x + 0.02 * s, top + 0.26 * s);
+    ctx.lineTo(x + 0.09 * s, top + 0.4 * s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + 0.1 * s, top + 0.42 * s, 0.06 * s, 0.025 * s, 0, Math.PI, 0);
+    ctx.fill();
   }
 
   private withWorld(x: number, y: number, flipX: number, fn: () => void) {

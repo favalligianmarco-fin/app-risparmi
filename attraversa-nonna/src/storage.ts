@@ -2,7 +2,10 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { FREE_NONNE } from './nonne';
 
-/** Progressi del giocatore. Restano solo sul dispositivo. */
+/**
+ * Progressi del giocatore. Restano sul dispositivo (su iOS nelle UserDefaults, incluse
+ * nei backup di iCloud) anche chiudendo l'app a metà corsa.
+ */
 export interface Save {
   version: 2;
   /** Record di distanza, in metri. */
@@ -67,19 +70,30 @@ export async function loadSave(): Promise<Save> {
 
 let pending: number | null = null;
 
+function write(save: Save) {
+  const raw = JSON.stringify(save);
+  if (native) void Preferences.set({ key: KEY, value: raw });
+  else {
+    try {
+      localStorage.setItem(KEY, raw);
+    } catch {
+      /* archiviazione non disponibile (es. navigazione privata) */
+    }
+  }
+}
+
 export function storeSave(save: Save) {
   // piccole raffiche di modifiche diventano una sola scrittura
   if (pending !== null) window.clearTimeout(pending);
   pending = window.setTimeout(() => {
     pending = null;
-    const raw = JSON.stringify(save);
-    if (native) void Preferences.set({ key: KEY, value: raw });
-    else {
-      try {
-        localStorage.setItem(KEY, raw);
-      } catch {
-        /* archiviazione non disponibile (es. navigazione privata) */
-      }
-    }
+    write(save);
   }, 150);
+}
+
+/** Scrive subito: quando l'app va in background iOS può chiuderla senza avvisare. */
+export function flushSave(save: Save) {
+  if (pending !== null) window.clearTimeout(pending);
+  pending = null;
+  write(save);
 }

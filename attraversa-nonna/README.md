@@ -5,9 +5,9 @@ scout) il più lontano possibile, attraversando strade sempre più trafficate. O
 tanto c'è una sosta con un minigioco da fare con lei. È pensato per l'App Store:
 funziona offline, non raccoglie dati e non chiede permessi.
 
-| Ciabatta | Il palazzo della sosta | Salta la fila | Alta velocità | Temporale | Le nonne |
+| Ciabatta | Il palazzo della sosta | Salta la fila | Alta velocità | Lavori in corso | Le nonne |
 |---|---|---|---|---|---|
-| ![](docs/screenshots/it/2-ciabatta.jpg) | ![](docs/screenshots/it/3-palazzo.jpg) | ![](docs/screenshots/it/4-posta.jpg) | ![](docs/screenshots/it/5-treno.jpg) | ![](docs/screenshots/it/6-temporale.jpg) | ![](docs/screenshots/it/7-nonne.jpg) |
+| ![](docs/screenshots/it/2-ciabatta.jpg) | ![](docs/screenshots/it/3-palazzo.jpg) | ![](docs/screenshots/it/4-posta.jpg) | ![](docs/screenshots/it/5-treno.jpg) | ![](docs/screenshots/it/6-lavori.jpg) | ![](docs/screenshots/it/7-nonne.jpg) |
 
 ## Come si gioca
 
@@ -31,12 +31,14 @@ funziona offline, non raccoglie dati e non chiede permessi.
   motocarro, lo scooter, il pullman, il tram. Da ~145 m arriva la **ferrovia**
   con il passaggio a livello: treni regionali e treni ad alta velocità, che vanno
   quasi il doppio e si annunciano con più anticipo.
-- **Da dietro arriva il temporale**: un nuvolone arrabbiato che spunta sempre dal
-  fondo dello schermo, segue la coppia con lo sguardo e sale se ci si ferma. Non
-  resta mai più di 8 metri indietro e va sempre più forte (0,4 m/s all'inizio,
-  1 m/s dopo gli 800 m): fermi, lo si ha addosso in meno di 20 secondi. Quando si
-  avvicina il cielo si scurisce, si sente la pioggia e la nonna protesta ("Cammina,
-  che mi si rovina la permanente!"). Se la raggiunge, la corsa finisce.
+- **Chi si ferma è perduto**: dietro la coppia ci sono i lavori in corso. Una fila
+  di transenne la segue a 3 metri dal punto più lontano raggiunto (mai oltre
+  l'ultimo marciapiede sicuro) e oltre non si torna indietro ("Indietro non si
+  torna!"). Se si resta fermi senza fare un metro in più, dopo qualche secondo
+  (7 all'inizio, 4,5 più avanti) le lanterne lampeggiano, spunta il cartello dei
+  lavori e la transenna avanza di una riga alla volta (ogni 1,6 s all'inizio, ogni
+  1,1 s più avanti); se supera la coppia la strada è chiusa e la corsa finisce.
+  Da fermi, quindi, si hanno circa 13 secondi all'inizio e 9 più avanti.
 - Le auto non investono mai la nonna: inchiodano all'ultimo e lei le manda a quel
   paese nel suo dialetto. Ogni spavento costa un cuore; con tre spaventi la
   corsa finisce.
@@ -62,6 +64,16 @@ funziona offline, non raccoglie dati e non chiede permessi.
 - **Le nonne d'Italia**: 20 nonne, una per regione, con vestiti, accessori e
   frasi proprie. Napoletana, calabrese e veneta sono subito disponibili; le altre
   si sbloccano con le caramelle.
+
+## Salvataggi
+
+Record, caramelle, nonne sbloccate e impostazioni restano sul telefono: su iOS nelle
+Preferences dell'app (UserDefaults), che sopravvivono alla chiusura dell'app e al
+riavvio e finiscono nei backup di iCloud. Durante la corsa record e caramelle
+vengono messi al sicuro quando l'app va in background e dopo ogni sosta, così se
+iOS la chiude (o la si chiude a metà strada) non si perde niente. Si perdono solo
+disinstallando l'app (salvo ripristino da backup). Nell'anteprima web (artifact)
+i dati stanno nel browser e possono non sopravvivere alla chiusura.
 
 ## Tecnologia
 
@@ -91,7 +103,7 @@ funziona offline, non raccoglie dati e non chiede permessi.
 ```
 src/
   world.ts         generatore della strada infinita e della difficoltà per metri
-  sim.ts           simulazione pura: traffico, collisioni, ciabatta, temporale, soste
+  sim.ts           simulazione pura: traffico, collisioni, ciabatta, lavori in corso, soste
   nonne.ts         le 20 nonne regionali: aspetto e frasi in dialetto
   minigames/       i quattro minigiochi delle soste
   render/          disegno: sfondi, piazze, veicoli, personaggi, effetti

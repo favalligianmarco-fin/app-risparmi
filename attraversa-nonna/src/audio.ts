@@ -19,7 +19,7 @@ export type Sfx =
   | 'horn'
   | 'splash'
   | 'pigeons'
-  | 'thunder'
+  | 'clank'
   | 'stop'
   | 'over'
   | 'click'
@@ -141,32 +141,6 @@ export class GameAudio {
 
   setSfx(on: boolean) {
     this.sfxOn = on;
-  }
-
-  private rain: GainNode | null = null;
-
-  /** Scroscio di pioggia continuo: 0 spento, 1 temporale addosso. */
-  setRain(level: number) {
-    const c = this.ctx;
-    if (!c || c.state !== 'running') return;
-    const target = this.sfxOn ? Math.max(0, Math.min(1, level)) * 0.14 : 0;
-    if (!this.rain) {
-      if (target < 0.002) return;
-      const src = c.createBufferSource();
-      src.buffer = this.noise;
-      src.loop = true;
-      const hp = c.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 900;
-      const lp = c.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 5000;
-      this.rain = c.createGain();
-      this.rain.gain.value = 0.0001;
-      src.connect(hp).connect(lp).connect(this.rain).connect(this.sfxBus);
-      src.start();
-    }
-    this.rain.gain.setTargetAtTime(Math.max(0.0001, target), c.currentTime, 0.35);
   }
 
   // ------------------------------------------------------------ primitive
@@ -301,9 +275,11 @@ export class GameAudio {
       case 'pigeons':
         for (let i = 0; i < 7; i++) this.noiseBurst(t + i * 0.055, 0.04, 0.12, 'bandpass', 1400, 1100, 2);
         break;
-      case 'thunder':
-        this.noiseBurst(t, 1.6, 0.5, 'lowpass', 500, 60, 0.7);
-        this.noiseBurst(t + 0.1, 0.25, 0.25, 'lowpass', 1600, 300, 0.7);
+      case 'clank':
+        // la transenna che viene spostata avanti: colpo di ferro sull'asfalto
+        this.tone('square', 190, 140, t, 0.07, 0.12);
+        this.tone('triangle', 1450, 1320, t + 0.01, 0.16, 0.08);
+        this.noiseBurst(t, 0.08, 0.2, 'bandpass', 3200, 1800, 3);
         break;
       case 'stop':
         ['C5', 'E5', 'G5'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.09, 0.18, 0.14));

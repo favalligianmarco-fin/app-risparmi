@@ -15,7 +15,7 @@ import type { BuildingStyle, Theme } from './render/background';
 import { Renderer } from './render/renderer';
 import { Sim } from './sim';
 import type { Dir, OverCause } from './sim';
-import { defaultSave, loadSave, storeSave } from './storage';
+import { defaultSave, flushSave, loadSave, storeSave } from './storage';
 import type { Save } from './storage';
 import { UI } from './ui';
 import type { Controller, HintKind } from './ui';
@@ -70,7 +70,9 @@ class Game implements Controller {
   /** Risoluzione massima del canvas: scende da sola se il telefono non tiene i 60 fps. */
   private dprCap = 3;
   private slowFor = 0;
-  private rainLevel = 0;
+  /** Caramelle della corsa già messe da parte dai checkpoint, e record prima della corsa. */
+  private banked = 0;
+  private runBest = 0;
 
   constructor() {
     this.renderer.texts = { ...t.fx };
@@ -100,6 +102,7 @@ class Game implements Controller {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (this.mode === 'playing') this.pause();
+        this.checkpoint();
         this.audio.suspend();
       } else {
         this.audio.resume();
@@ -152,7 +155,7 @@ class Game implements Controller {
 
   private applyNonna() {
     const n = this.nonna;
-    this.renderer.voice = { hit: n.hit, slipper: n.slipper, happy: n.happy, storm: t.stormLines };
+    this.renderer.voice = { hit: n.hit, slipper: n.slipper, happy: n.happy, closing: t.closingLines, back: t.backLines };
   }
 
   // ------------------------------------------------------------ ciclo principale
@@ -169,12 +172,6 @@ class Game implements Controller {
     if (this.mode === 'playing') {
       this.ui.updateHud(this.sim);
       this.watchSmoothness(dt);
-    }
-    // la pioggia si sente di più quanto più il temporale è vicino
-    const rain = this.mode === 'playing' && this.sim.started ? this.sim.stormCloseness() : 0;
-    if (Math.abs(rain - this.rainLevel) > 0.03 || (rain === 0 && this.rainLevel !== 0)) {
-      this.rainLevel = rain;
-      this.audio.setRain(rain);
     }
     // durante il minigioco la strada è coperta: non serve ridisegnarla
     if (!(this.mode === 'stop' && document.querySelector('.mg'))) {
@@ -259,13 +256,15 @@ class Game implements Controller {
         case 'pigeons':
           this.playSfx('pigeons');
           break;
-        case 'thunder':
-          this.playSfx('thunder');
+        case 'closeWarn':
+          if (!this.hint) this.flashHint('closing', 2400);
           break;
-        case 'stormNear':
-          this.playSfx('thunder');
-          tap('medium');
-          if (!this.hint) this.flashHint('storm', 2200);
+        case 'closeStep':
+          this.playSfx('clank');
+          tap('light');
+          break;
+        case 'backBlocked':
+          tap('light');
           break;
         case 'meter':
           if (this.tutorial === 2 && e.meters >= 18) this.advanceTutorial();
@@ -347,6 +346,7 @@ class Game implements Controller {
       );
       if (this.sim !== sim) return;
       sim.finishStop(res.success, res.reward);
+      this.checkpoint();
       this.renderer.leave();
       if (sim.status === 'over') {
         this.handleEvents();
@@ -368,10 +368,12 @@ class Game implements Controller {
     notify('warning');
     const sim = this.sim;
     const meters = sim.meters;
-    const newBest = meters > this.save.best;
-    const prevBest = this.save.best;
+    // il record da battere è quello di prima della corsa (i checkpoint l'avranno già aggiornato)
+    const newBest = meters > this.runBest;
+    const prevBest = this.runBest;
     this.save.best = Math.max(this.save.best, meters);
-    this.save.candies += sim.candies;
+    this.save.candies += sim.candies - this.banked;
+    this.banked = sim.candies;
     this.save.runs++;
     if (meters >= 25) this.save.tutorial = true;
     storeSave(this.save);
@@ -393,7 +395,21 @@ class Game implements Controller {
     sim.placePlayer(median > 0 ? median : 0, 4);
     this.sim = sim;
     this.attract = true;
+    this.renderer.closeOn = false;
     this.renderer.setSim(sim);
+  }
+
+  /**
+   * Mette al sicuro record e caramelle della corsa in corso: se iOS chiude l'app
+   * mentre è in background, o la si chiude a metà strada, non si perde niente.
+   */
+  private checkpoint() {
+    if (this.attract || !['playing', 'paused', 'stop'].includes(this.mode)) return;
+    const sim = this.sim;
+    this.save.best = Math.max(this.save.best, sim.meters);
+    this.save.candies += sim.candies - this.banked;
+    this.banked = sim.candies;
+    flushSave(this.save);
   }
 
   openTitle() {
@@ -410,6 +426,9 @@ class Game implements Controller {
     window.clearTimeout(this.overTimer);
     this.sim = new Sim(randomSeed());
     this.attract = false;
+    this.banked = 0;
+    this.runBest = this.save.best;
+    this.renderer.closeOn = true;
     this.renderer.setSim(this.sim);
     this.ui.clear();
     this.ui.showHud(true);
