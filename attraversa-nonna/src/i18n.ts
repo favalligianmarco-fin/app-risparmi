@@ -28,6 +28,8 @@ const it = {
   newBest: 'Nuovo record!',
   statCandies: 'Caramelle',
   statStops: 'Soste',
+  statNear: 'Per un pelo',
+  near: 'Per un pelo!',
   overTitle: {
     hits: 'Troppi spaventi!',
     closed: 'Strada chiusa!',
@@ -158,6 +160,8 @@ const en: Strings = {
   newBest: 'New record!',
   statCandies: 'Candies',
   statStops: 'Stops',
+  statNear: 'Close calls',
+  near: 'Close call!',
   overTitle: {
     hits: 'Too many scares!',
     closed: 'Road closed!',

@@ -23,6 +23,8 @@ caratteri usati.
 > • Alza la ciabatta della nonna: chi la vede inchioda.
 > • Il tram e i treni non si fermano per nessuno: al passaggio a livello aspetta che passi il regionale… o il treno veloce.
 > • Chi si ferma è perduto: dietro ci sono i lavori in corso e, se resti fermo, chiudono la strada.
+> • Schiva per un pelo: più rischi, più caramelle, e le serie valgono doppio e triplo.
+> • Il tuo record è segnato sulla strada: superalo e scoppia la festa.
 > • Raccogli caramelle, bevi un caffè per andare più veloce, trova ciabatte di scorta.
 >
 > LE SOSTE
@@ -79,6 +81,8 @@ nonna,strada,traffico,infinito,ciabatta,dialetto,minigiochi,tram,arcade,casual,i
 > • Raise Nonna's slipper: whoever sees it slams the brakes.
 > • Trams and trains stop for nobody: at the level crossing, wait for the regional train… or the high-speed one.
 > • Whoever stops is lost: there are roadworks behind you, and if you stand still they close the road.
+> • Close calls pay off: the riskier the dodge, the more candies, and streaks multiply them.
+> • Your record is marked on the road: beat it and the party starts.
 > • Collect candies, grab an espresso to walk faster, find spare slippers.
 >
 > STOPS

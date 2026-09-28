@@ -73,9 +73,13 @@ class Game implements Controller {
   /** Caramelle della corsa già messe da parte dai checkpoint, e record prima della corsa. */
   private banked = 0;
   private runBest = 0;
+  /** In questa corsa il record è già stato superato; ultima tappa da 100 m festeggiata. */
+  private recordDone = false;
+  private milestone = 0;
 
   constructor() {
-    this.renderer.texts = { ...t.fx };
+    this.renderer.texts = { ...t.fx, near: t.near, newBest: t.newBest, record: t.best };
+    this.renderer.onSpeak = (text) => this.audio.mumble(text, this.voicePitch());
     this.renderer.styleOf = stopStyle;
     this.renderer.reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     this.input = new Input(
@@ -257,6 +261,7 @@ class Game implements Controller {
           this.playSfx('pigeons');
           break;
         case 'closeWarn':
+          this.playSfx('clank');
           if (!this.hint) this.flashHint('closing', 2400);
           break;
         case 'closeStep':
@@ -268,6 +273,11 @@ class Game implements Controller {
           break;
         case 'meter':
           if (this.tutorial === 2 && e.meters >= 18) this.advanceTutorial();
+          this.onMeter(e.meters);
+          break;
+        case 'nearMiss':
+          this.playSfx('near');
+          tap(e.train || e.streak >= 3 ? 'medium' : 'light');
           break;
         case 'stop':
           this.onStop(e.stop);
@@ -381,7 +391,7 @@ class Game implements Controller {
     this.overTimer = window.setTimeout(() => {
       if (this.sim !== sim || this.mode !== 'over') return;
       this.ui.showHud(false);
-      this.ui.showOver({ cause, meters, best: newBest ? meters : prevBest, newBest: newBest && prevBest > 0, candies: sim.candies, stops: sim.stopsDone });
+      this.ui.showOver({ cause, meters, best: newBest ? meters : prevBest, newBest: newBest && prevBest > 0, candies: sim.candies, stops: sim.stopsDone, near: sim.nearMisses });
     }, 1100);
   }
 
@@ -397,6 +407,31 @@ class Game implements Controller {
     this.attract = true;
     this.renderer.closeOn = false;
     this.renderer.setSim(sim);
+  }
+
+  /** Traguardi durante la corsa: il proprio record superato e ogni 100 metri. */
+  private onMeter(m: number) {
+    if (this.attract) return;
+    if (!this.recordDone && this.runBest > 0 && m > this.runBest) {
+      this.recordDone = true;
+      this.renderer.recordBroken();
+      this.playSfx('record');
+      notify('success');
+      return;
+    }
+    const step = Math.floor(m / 100);
+    if (step > this.milestone) {
+      this.milestone = step;
+      this.renderer.milestone(step * 100);
+      this.playSfx('milestone');
+    }
+  }
+
+  /** Il tono di voce della nonna scelta: ogni nonna borbotta un po' diversa. */
+  private voicePitch() {
+    let h = 0;
+    for (const ch of this.save.nonna) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return 300 + (h % 140);
   }
 
   /**
@@ -428,7 +463,10 @@ class Game implements Controller {
     this.attract = false;
     this.banked = 0;
     this.runBest = this.save.best;
+    this.recordDone = false;
+    this.milestone = 0;
     this.renderer.closeOn = true;
+    this.renderer.recordRow = this.save.best;
     this.renderer.setSim(this.sim);
     this.ui.clear();
     this.ui.showHud(true);

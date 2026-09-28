@@ -43,6 +43,14 @@ export function closeGrace(meters: number) {
   return Math.max(4.5, 7 - meters / 250);
 }
 
+/** Secondi di avviso: la transenna si fa vedere prima di cominciare ad avanzare. */
+export const CLOSE_SHOW = 2;
+
+/** Tempo per dire "per un pelo!": un mezzo passa dove la coppia era un attimo fa. */
+const NEAR_WINDOW = 0.4;
+/** Entro quanti secondi un'altra schivata allunga la serie. */
+const STREAK_TIME = 5;
+
 /** Ogni quanti secondi, da fermi, la transenna avanza di una riga. */
 export function closeStep(meters: number) {
   return Math.max(1.1, 1.6 - meters / 800);
@@ -142,6 +150,7 @@ export type SimEvent =
   | { type: 'meter'; meters: number }
   | { type: 'stop'; stop: Stop }
   | { type: 'closeWarn' }
+  | { type: 'nearMiss'; x: number; y: number; streak: number; bonus: number; train: boolean }
   | { type: 'closeStep'; row: number }
   | { type: 'backBlocked' }
   | { type: 'over'; cause: OverCause };
@@ -169,6 +178,10 @@ export class Sim {
   idleT = 0;
   /** La transenna sta avanzando perché la coppia è ferma. */
   closing = false;
+  /** Si è fermi da troppo: la transenna si fa vedere (poi avanza). */
+  alert = false;
+  /** Schivate "per un pelo" della corsa. */
+  nearMisses = 0;
   currentStop: Stop | null = null;
   /** Nella prima partita gli spaventi prima di questa riga non tolgono cuori. */
   graceRows = 0;
@@ -179,6 +192,11 @@ export class Sim {
   private liveLo = 0;
   private liveHi = -1;
   private closeT = 0;
+  private leftRow = -1;
+  private leftCol = 0;
+  private leftT = 0;
+  private streak = 0;
+  private streakT = 0;
   /** Il posto sicuro più lontano raggiunto: la transenna non lo supera da sola. */
   private maxSafe = 0;
   private backWarnT = 0;
@@ -231,6 +249,7 @@ export class Sim {
     this.backRow = Math.max(0, row - BACK_LAG);
     this.idleT = 0;
     this.closing = false;
+    this.alert = false;
     this.refreshLive();
   }
 
@@ -530,6 +549,12 @@ export class Sim {
       this.events.push({ type: 'bump' });
       return;
     }
+    // lasciando una corsia si guarda se un mezzo passa proprio lì un attimo dopo
+    if (dy !== 0 && isHazard(this.rowState(p.row).def.kind)) {
+      this.leftRow = p.row;
+      this.leftCol = p.col;
+      this.leftT = this.time;
+    }
     p.fromCol = p.col;
     p.fromRow = p.row;
     p.col = nc;
@@ -556,6 +581,7 @@ export class Sim {
       this.maxRow = p.row;
       this.idleT = 0;
       this.closing = false;
+      this.alert = false;
       this.events.push({ type: 'meter', meters: this.maxRow });
     }
     if (rs.puddle[p.col]) {
@@ -616,6 +642,7 @@ export class Sim {
     this.backRow = Math.max(this.backRow, exit);
     this.idleT = -2 * closeStep(this.maxRow);
     this.closing = false;
+    this.alert = false;
     this.status = 'playing';
     this.refreshLive();
     this.events.push({ type: 'meter', meters: this.maxRow });
@@ -736,11 +763,16 @@ export class Sim {
     // nella prima partita, finché si impara, il cantiere aspetta
     if (this.maxRow < this.graceRows) return;
     this.idleT += h;
-    if (this.idleT >= closeGrace(this.maxRow)) {
+    const grace = closeGrace(this.maxRow);
+    // prima si fa vedere (con un paio di secondi di avviso), poi comincia ad avanzare
+    if (this.idleT >= grace - CLOSE_SHOW && !this.alert) {
+      this.alert = true;
+      this.events.push({ type: 'closeWarn' });
+    }
+    if (this.idleT >= grace) {
       if (!this.closing) {
         this.closing = true;
         this.closeT = 0;
-        this.events.push({ type: 'closeWarn' });
       }
       this.closeT += h;
       if (this.closeT >= closeStep(this.maxRow)) {
@@ -750,6 +782,32 @@ export class Sim {
       }
     }
     if (this.backRow > p.row && p.stunned <= 0) this.end('closed');
+  }
+
+  /** "Per un pelo!": un mezzo in corsa passa dove la coppia era un attimo prima. */
+  private checkNearMiss(h: number) {
+    if (this.streakT > 0) {
+      this.streakT -= h;
+      if (this.streakT <= 0) this.streak = 0;
+    }
+    if (this.leftRow < 0) return;
+    if (this.time - this.leftT > NEAR_WINDOW) {
+      this.leftRow = -1;
+      return;
+    }
+    const cx = this.leftCol + 0.5;
+    for (const v of this.rowState(this.leftRow).vehicles) {
+      if (v.speed < 1 || Math.abs(v.x - cx) > v.len / 2 + 0.1) continue;
+      const train = isTrain(v.kind);
+      this.streak = this.streakT > 0 ? this.streak + 1 : 1;
+      this.streakT = STREAK_TIME;
+      this.nearMisses++;
+      const bonus = Math.min(5, this.streak) * (train ? 2 : 1);
+      this.candies += bonus;
+      this.events.push({ type: 'nearMiss', x: cx, y: this.leftRow + 0.5, streak: this.streak, bonus, train });
+      this.leftRow = -1;
+      return;
+    }
   }
 
   private updatePigeons(h: number) {
@@ -798,6 +856,7 @@ export class Sim {
       this.updatePlayer(h);
       if (this.status === 'playing') this.checkCollisions();
       if (this.status === 'playing' && this.started) this.updateClose(h);
+      if (this.status === 'playing') this.checkNearMiss(h);
     }
     this.updatePigeons(h);
   }

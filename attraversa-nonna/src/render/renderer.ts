@@ -62,6 +62,9 @@ export interface Texts {
   coffee: string;
   extraSlipper: string;
   extraHeart: string;
+  near: string;
+  newBest: string;
+  record: (m: number) => string;
 }
 
 /** Le frasi della nonna scelta. */
@@ -96,13 +99,22 @@ export class Renderer {
   /** Dove sta disegnata la transenna (insegue la riga vera). */
   private backY = 0;
   private barrier: HTMLCanvasElement[] = [];
+  /** Quanto si vede la transenna (0 nascosta, 1 in piedi) e per quanto resta dopo un "indietro no". */
+  private barrierVis = 0;
+  private backFlash = 0;
+  private recordSpr: HTMLCanvasElement | null = null;
+  private recordKey = '';
   private barrierKey = '';
   /** Animazione della coppia che entra nel palazzo della sosta. */
   private enterT = -1;
   private enterStop: Stop | null = null;
   private time = 0;
   reduceMotion = false;
-  texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1' };
+  texts: Texts = { honk: 'Beep!', coffee: 'Espresso!', extraSlipper: '+1', extraHeart: '+1', near: 'Close!', newBest: 'Record!', record: (m) => `${m} m` };
+  /** Chi dà voce ai fumetti della nonna (il borbottio "nonnese"). */
+  onSpeak: ((text: string) => void) | null = null;
+  /** Record da battere in questa corsa (0: nessuno), disegnato sulla strada. */
+  recordRow = 0;
   voice: Voice = { hit: ['Hey!'], slipper: ['STOP!'], happy: ['Yay!'], closing: ['Hurry!'], back: ['No!'] };
   styleOf: (stop: Stop) => BuildingStyle = () => {
     throw new Error('styleOf non impostato');
@@ -148,6 +160,8 @@ export class Renderer {
     this.bg = new Background(sim.world, this.s, this.xLeft, this.xRight, (st) => this.styleOf(st));
     this.sim = sim;
     this.backY = sim.backRow;
+    this.barrierVis = 0;
+    this.backFlash = 0;
     if (!keepCamera) {
       this.camY = this.camTarget(sim);
       for (const p of this.particles) p.alive = false;
@@ -198,6 +212,93 @@ export class Renderer {
     const text = lines[Math.floor(Math.random() * lines.length)];
     const p = this.sim?.playerPos() ?? { x: 4.5, y: 0 };
     this.float(text, p.x, p.y, color, true, max, 0.36);
+    this.onSpeak?.(text);
+  }
+
+  /** Superato il proprio record a metà corsa: festa. */
+  recordBroken() {
+    const sim = this.sim;
+    if (!sim) return;
+    const p = sim.playerPos();
+    this.float(this.texts.newBest, p.x, p.y + 1.6, '#f7c948', false, 1.8, 0.5);
+    for (let i = 0; i < 70; i++)
+      this.spawn('confetti', p.x + (Math.random() - 0.5) * 6, p.y + 1 + Math.random() * 2, (Math.random() - 0.5) * 5, 2 + Math.random() * 4, 2.2, 0.09, CONFETTI[i % CONFETTI.length]);
+  }
+
+  /** Una tappa (ogni 100 metri). */
+  milestone(m: number) {
+    const sim = this.sim;
+    if (!sim) return;
+    const p = sim.playerPos();
+    this.float(`${m} m!`, p.x, p.y + 1.3, '#ffffff', false, 1.3, 0.48);
+    for (let i = 0; i < 24; i++)
+      this.spawn('confetti', p.x + (Math.random() - 0.5) * 3, p.y + 1 + Math.random(), (Math.random() - 0.5) * 3, 2 + Math.random() * 3, 1.6, 0.08, CONFETTI[i % CONFETTI.length]);
+  }
+
+  /**
+   * La linea a scacchi del record: la striscia è dipinta per terra (sotto i mezzi), la
+   * bandierina col numero sta sopra a tutto (`flag`).
+   */
+  private drawRecordLine(flag: boolean) {
+    if (!this.recordRow || !this.closeOn) return;
+    const s = this.s;
+    const y = Math.round(this.Y(this.recordRow + 1));
+    if (y < -s || y > this.canvas.height + 0.3 * s) return;
+    // dentro un palazzo delle soste la striscia per terra non ha senso: resta la bandierina
+    const def = this.sim?.world.rows[this.recordRow + 1];
+    if (!flag && def?.stop && this.recordRow + 1 > def.stop.entry) return;
+    const spr = this.recordSprite();
+    const top = Math.round(0.6 * s);
+    if (flag) this.ctx.drawImage(spr, 0, 0, spr.width, top, 0, y - Math.round(0.95 * s), spr.width, top);
+    else this.ctx.drawImage(spr, 0, top, spr.width, spr.height - top, 0, y - Math.round(0.95 * s) + top, spr.width, spr.height - top);
+  }
+
+  private recordSprite(): HTMLCanvasElement {
+    const s = this.s;
+    const W = this.canvas.width;
+    const key = `${W}:${s}:${this.recordRow}`;
+    if (this.recordSpr && this.recordKey === key) return this.recordSpr;
+    if (this.recordSpr) this.recordSpr.width = 0;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = Math.ceil(1.2 * s);
+    const g = c.getContext('2d')!;
+    const base = 0.95 * s;
+    const q = 0.14 * s;
+    // due file di quadretti bianchi e neri
+    for (let i = 0; i * q < W; i++) {
+      for (let r = 0; r < 2; r++) {
+        g.fillStyle = (i + r) % 2 ? '#2d2a3e' : '#ffffff';
+        g.fillRect(i * q, base - q + r * q, q + 0.5, q + 0.5);
+      }
+    }
+    g.fillStyle = 'rgba(40,30,60,0.25)';
+    g.fillRect(0, base + q, W, 0.05 * s);
+    // la bandierina col record, sul bordo sinistro
+    const px = 0.28 * s;
+    g.fillStyle = '#2d2a3e';
+    g.fillRect(px - 0.025 * s, base - 0.9 * s, 0.05 * s, 0.9 * s);
+    const label = this.texts.record(this.recordRow);
+    g.font = `700 ${Math.round(0.24 * s)}px ${FONT}`;
+    const tw = g.measureText(label).width + 0.3 * s;
+    g.fillStyle = '#e84a4a';
+    g.strokeStyle = '#2d2a3e';
+    g.lineWidth = 0.03 * s;
+    g.beginPath();
+    g.moveTo(px, base - 0.9 * s);
+    g.lineTo(px + tw, base - 0.9 * s);
+    g.lineTo(px + tw - 0.1 * s, base - 0.72 * s);
+    g.lineTo(px + tw, base - 0.54 * s);
+    g.lineTo(px, base - 0.54 * s);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#ffffff';
+    g.textBaseline = 'middle';
+    g.fillText(label, px + 0.1 * s, base - 0.715 * s);
+    this.recordSpr = c;
+    this.recordKey = key;
+    return c;
   }
 
   onEvent(e: SimEvent, sim: Sim) {
@@ -260,8 +361,21 @@ export class Renderer {
           this.spawn('dust', 0.5 + Math.random() * (COLS - 1), e.row + 0.05, (Math.random() - 0.5) * 0.8, 0.5, 0.45, 0.1, '#e8dcc8');
         break;
       case 'backBlocked':
+        this.backFlash = 1.6;
         this.say('back', '#c0392b', 1.2);
         break;
+      case 'nearMiss': {
+        const big = e.train || e.streak >= 3;
+        const label = e.streak > 1 ? `${this.texts.near} ×${e.streak}` : this.texts.near;
+        this.float(label, e.x, e.y + 0.9, big ? '#f7c948' : '#ffffff', false, 1.1, big ? 0.46 : 0.38);
+        this.float(`+${e.bonus}`, e.x + 0.6, e.y + 0.4, '#e84a8a', false, 0.9, 0.3);
+        for (let i = 0; i < (big ? 14 : 8); i++) {
+          const a = (i / (big ? 14 : 8)) * Math.PI * 2;
+          this.spawn('spark', e.x, e.y + 0.3, Math.cos(a) * 2.4, Math.sin(a) * 2.4, 0.5, 0.08, i % 2 ? '#ffffff' : '#f7c948');
+        }
+        if (big) this.shake = Math.max(this.shake, 0.12);
+        break;
+      }
       case 'over':
         if (e.cause === 'closed') {
           const p = sim.playerPos();
@@ -339,6 +453,7 @@ export class Renderer {
     ctx.fillStyle = '#6ec3f0';
     ctx.fillRect(-20, -20, this.canvas.width + 40, this.canvas.height + 40);
     this.bg?.draw(ctx, this.camY, this.canvas.height);
+    this.drawRecordLine(false);
 
     const s = this.s;
     const visTop = this.camY + this.canvas.height / s;
@@ -449,6 +564,7 @@ export class Renderer {
     }
 
     this.drawDoorArrow(sim);
+    this.drawRecordLine(true);
     this.drawParticles();
     this.drawClose(sim, dt);
 
@@ -538,15 +654,25 @@ export class Renderer {
     const Hc = this.canvas.height;
     // scivola alla nuova riga invece di saltarci
     this.backY += (sim.backRow - this.backY) * Math.min(1, dt * 12);
+    // di solito è nascosta: spunta se si resta fermi troppo, se si prova a tornare
+    // indietro o se le si arriva addosso camminando all'indietro
+    const p = sim.player;
+    if (this.backFlash > 0) this.backFlash -= dt;
+    const show = sim.alert || this.backFlash > 0 || (p.row < sim.maxRow && p.row - sim.backRow <= 1);
+    this.barrierVis += ((show ? 1 : 0) - this.barrierVis) * Math.min(1, dt * (show ? 9 : 4));
+    if (this.barrierVis < 0.02) return;
+    const k = this.barrierVis;
     const line = Math.round(this.Y(this.backY));
     if (line - BARRIER_UP * s > Hc) return;
     if (line < Hc) {
-      ctx.fillStyle = 'rgba(40,36,56,0.38)';
+      ctx.fillStyle = `rgba(40,36,56,${(0.38 * k).toFixed(3)})`;
       ctx.fillRect(0, line, W, Hc - line);
     }
     // lanterne arancioni: lampeggiano a gruppi alterni, piano o di corsa se il cantiere avanza
-    const phase = Math.floor(this.time * (sim.closing ? 4 : 1.2)) % 2;
-    ctx.drawImage(this.barrierSprite(phase), 0, line - Math.round(BARRIER_UP * s));
+    const phase = Math.floor(this.time * (sim.closing ? 4 : 1.8)) % 2;
+    ctx.globalAlpha = k;
+    ctx.drawImage(this.barrierSprite(phase), 0, line - Math.round(BARRIER_UP * s - (1 - k) * 0.6 * s));
+    ctx.globalAlpha = 1;
     // quando avanza, compare il cartello dei lavori dal lato opposto alla coppia
     if (sim.closing) {
       const col = sim.player.col < COLS / 2 ? COLS - 1.5 : 1.5;

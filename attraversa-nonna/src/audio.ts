@@ -20,6 +20,9 @@ export type Sfx =
   | 'splash'
   | 'pigeons'
   | 'clank'
+  | 'near'
+  | 'record'
+  | 'milestone'
   | 'stop'
   | 'over'
   | 'click'
@@ -141,6 +144,43 @@ export class GameAudio {
 
   setSfx(on: boolean) {
     this.sfxOn = on;
+  }
+
+  private mumbleUntil = 0;
+
+  /**
+   * Il "nonnese": al posto di una voce registrata, un borbottio a sillabe da cartone
+   * animato, più acuto e più forte quando la nonna strilla.
+   */
+  mumble(text: string, pitch: number) {
+    const c = this.ctx;
+    if (!c || !this.sfxOn || c.state !== 'running') return;
+    const now = c.currentTime;
+    if (now < this.mumbleUntil - 0.1) return;
+    const letters = text.replace(/[^\p{L}]/gu, '').length;
+    const n = Math.max(3, Math.min(9, Math.round(letters / 3)));
+    const shout = text.includes('!');
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2200;
+    lp.connect(this.sfxBus);
+    let t = now + 0.01;
+    for (let i = 0; i < n; i++) {
+      const dur = 0.05 + Math.random() * 0.04;
+      const last = i === n - 1;
+      const f = pitch * (0.85 + Math.random() * 0.35) * (last ? (shout ? 1.3 : 0.8) : 1);
+      const o = c.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.linearRampToValueAtTime(f * (0.9 + Math.random() * 0.25), t + dur);
+      const g = c.createGain();
+      this.env(g, t, shout ? 0.075 : 0.055, 0.008, dur);
+      o.connect(g).connect(lp);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+      t += dur + 0.02;
+    }
+    this.mumbleUntil = t;
   }
 
   // ------------------------------------------------------------ primitive
@@ -300,6 +340,20 @@ export class GameAudio {
         break;
       case 'tick':
         this.tone('square', 880, 880, t, 0.06, 0.06);
+        break;
+      case 'near':
+        // fruscio del mezzo che passa, e un "ding" di soddisfazione
+        this.noiseBurst(t, 0.22, 0.22, 'bandpass', 700, 2600, 1.4);
+        this.tone('sine', NOTE.E6, NOTE.E6, t + 0.08, 0.16, 0.12);
+        this.tone('sine', NOTE.B6, NOTE.B6, t + 0.15, 0.2, 0.09);
+        break;
+      case 'record':
+        ['C5', 'E5', 'G5', 'C6', 'E6'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.09, i === 4 ? 0.5 : 0.18, 0.16));
+        this.noiseBurst(t + 0.4, 0.4, 0.1, 'highpass', 6000, 3000);
+        break;
+      case 'milestone':
+        this.tone('triangle', NOTE.G5, NOTE.G5, t, 0.14, 0.13);
+        this.tone('triangle', NOTE.C6, NOTE.C6, t + 0.1, 0.26, 0.13);
         break;
       case 'cash':
         ['E6', 'G6', 'C7'].forEach((n, i) => this.tone('triangle', NOTE[n], NOTE[n], t + i * 0.07, 0.25, 0.12));

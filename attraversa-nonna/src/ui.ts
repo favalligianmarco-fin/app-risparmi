@@ -55,6 +55,7 @@ export interface OverData {
   newBest: boolean;
   candies: number;
   stops: number;
+  near: number;
 }
 
 export class UI {
@@ -285,6 +286,7 @@ export class UI {
           <div class="stats">
             <div class="stat"><small>${esc(t.statCandies)}</small><strong>${d.candies}</strong></div>
             <div class="stat"><small>${esc(t.statStops)}</small><strong>${d.stops}</strong></div>
+            <div class="stat"><small>${esc(t.statNear)}</small><strong>${d.near}</strong></div>
           </div>
           <button class="btn primary go" data-action="restart">${play}${esc(t.retry)}</button>
           <div class="menu-row">

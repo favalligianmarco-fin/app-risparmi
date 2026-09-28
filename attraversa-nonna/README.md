@@ -31,14 +31,26 @@ funziona offline, non raccoglie dati e non chiede permessi.
   motocarro, lo scooter, il pullman, il tram. Da ~145 m arriva la **ferrovia**
   con il passaggio a livello: treni regionali e treni ad alta velocità, che vanno
   quasi il doppio e si annunciano con più anticipo.
-- **Chi si ferma è perduto**: dietro la coppia ci sono i lavori in corso. Una fila
-  di transenne la segue a 3 metri dal punto più lontano raggiunto (mai oltre
-  l'ultimo marciapiede sicuro) e oltre non si torna indietro ("Indietro non si
-  torna!"). Se si resta fermi senza fare un metro in più, dopo qualche secondo
-  (7 all'inizio, 4,5 più avanti) le lanterne lampeggiano, spunta il cartello dei
-  lavori e la transenna avanza di una riga alla volta (ogni 1,6 s all'inizio, ogni
-  1,1 s più avanti); se supera la coppia la strada è chiusa e la corsa finisce.
-  Da fermi, quindi, si hanno circa 13 secondi all'inizio e 9 più avanti.
+- **Chi si ferma è perduto**: dietro la coppia ci sono i lavori in corso, ma di
+  solito non si vedono. Una fila di transenne la segue di nascosto a 3 metri dal
+  punto più lontano raggiunto (mai oltre l'ultimo marciapiede sicuro) e oltre non
+  si torna indietro. Le transenne spuntano da terra solo quando servono: se si
+  prova a tornare indietro ("Indietro non si torna!"), se ci si arriva vicino
+  camminando all'indietro, o se si resta fermi senza fare un metro in più. In
+  quel caso compaiono con due secondi di avviso (7 s da fermi all'inizio, 4,5 s
+  più avanti), poi avanzano di una riga alla volta col cartello dei lavori (ogni
+  1,6 s all'inizio, ogni 1,1 s più avanti). Se superano la coppia la strada è
+  chiusa e la corsa finisce. Appena si riparte, tornano a nascondersi.
+- **Per un pelo!**: se un mezzo passa proprio dove la coppia era un attimo prima
+  (meno di mezzo secondo), la schivata vale caramelle bonus; più schivate di fila
+  (entro 5 s) fanno la serie ×2, ×3… fino a ×5, e col treno valgono doppio. A fine
+  corsa c'è il conto delle schivate.
+- **Il tuo record sulla strada**: una linea a scacchi con la bandierina segna il
+  punto del record; superarlo a metà corsa fa partire coriandoli e fanfara. Ogni
+  100 metri c'è un piccolo applauso.
+- **La voce delle nonne**: quando parlano, i fumetti si sentono in "nonnese", un
+  borbottio a sillabe da cartone animato (ogni nonna ha il suo tono, e quando
+  strilla è più acuto).
 - Le auto non investono mai la nonna: inchiodano all'ultimo e lei le manda a quel
   paese nel suo dialetto. Ogni spavento costa un cuore; con tre spaventi la
   corsa finisce.
